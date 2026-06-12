@@ -5,110 +5,123 @@ import '../models/cbt_models.dart';
 class CBTQuestionService {
   static final _uuid = const Uuid();
 
-  // Later: fetch from backend by (schoolId, deptId, level, courseCode)
   static List<CBTQuestionModel> loadQuestions({
     required String courseCode,
     String? topic,
   }) {
+    final code = courseCode.trim().isEmpty ? 'CSC 305' : courseCode.trim();
     final all = <CBTQuestionModel>[
       CBTQuestionModel(
         id: _uuid.v4(),
-        courseCode: courseCode,
-        topic: "Objective / MCQ",
+        courseCode: code,
+        topic: 'Data Structures',
         question:
-            "In a binary search tree, the left subtree contains values that are:",
-        options: [
-          "Greater than root",
-          "Less than root",
-          "Equal to root only",
-          "Random order",
-        ],
-        correctIndex: 1,
-        explanation: "BST property: left < root < right.",
-        sourceLabel: "$courseCode Past Qs 2019",
-      ),
-      CBTQuestionModel(
-        id: _uuid.v4(),
-        courseCode: courseCode,
-        topic: "Objective / MCQ",
-        question:
-            "Which sorting algorithm is generally O(n log n) average-case?",
-        options: [
-          "Bubble sort",
-          "Insertion sort",
-          "Quick sort",
-          "Selection sort",
-        ],
-        correctIndex: 2,
-        explanation: "Quick sort average is O(n log n), worst is O(n²).",
-        sourceLabel: "$courseCode Past Qs 2020",
-      ),
-      CBTQuestionModel(
-        id: _uuid.v4(),
-        courseCode: courseCode,
-        topic: "Objective / MCQ",
-        question: "BFS uses which data structure?",
-        options: ["Stack", "Queue", "Tree", "Heap"],
-        correctIndex: 1,
-        explanation: "BFS explores level-by-level using a queue.",
-        sourceLabel: "$courseCode Past Qs 2021",
-      ),
-      CBTQuestionModel(
-        id: _uuid.v4(),
-        courseCode: courseCode,
-        topic: "Multiple Choice",
-        question: "Which option best describes encapsulation in programming?",
-        options: [
-          "Hiding implementation details behind a public interface",
-          "Sorting data in descending order",
-          "Running two programs at the same time",
-          "Copying code into many files",
+            'A search operation repeatedly divides a sorted dataset into two halves. Which condition is required for this method to work correctly?',
+        options: const [
+          'The records must be ordered by the search key',
+          'The records must contain duplicate keys',
+          'The records must be stored only as a linked list',
+          'The records must be shuffled before searching',
         ],
         correctIndex: 0,
         explanation:
-            "Encapsulation groups data and behavior while exposing a controlled interface.",
-        sourceLabel: "$courseCode Sample MCQ",
+            'Binary search depends on ordered records and comparison with the middle item.',
       ),
       CBTQuestionModel(
         id: _uuid.v4(),
-        courseCode: courseCode,
-        topic: "True / False",
-        question: "A queue normally follows First-In, First-Out behavior.",
-        options: ["True", "False"],
-        correctIndex: 0,
-        explanation: "Queues remove the earliest inserted item first.",
-        sourceLabel: "$courseCode Sample True/False",
-      ),
-      CBTQuestionModel(
-        id: _uuid.v4(),
-        courseCode: courseCode,
-        topic: "Scenario",
+        courseCode: code,
+        topic: 'Trees',
         question:
-            "A student app must keep working when internet is weak. Which feature helps most?",
-        options: [
-          "Offline cache and later sync",
-          "Bigger buttons only",
-          "Longer animations",
-          "Removing all feedback",
+            'In a binary search tree with unique values, where should a value smaller than the current node be placed?',
+        options: const [
+          'Right subtree',
+          'Left subtree',
+          'Root position',
+          'Any empty node',
         ],
-        correctIndex: 0,
+        correctIndex: 1,
         explanation:
-            "Offline cache with sync preserves learning progress during poor connectivity.",
-        sourceLabel: "$courseCode Applied Sample",
+            'A binary search tree keeps smaller values on the left and larger values on the right.',
+      ),
+      CBTQuestionModel(
+        id: _uuid.v4(),
+        courseCode: code,
+        topic: 'Queues and Stacks',
+        question:
+            'A service desk must attend to requests in the same order they arrive. Which structure is most suitable?',
+        options: const [
+          'Stack',
+          'Queue',
+          'Unordered tree',
+          'Recursive call stack',
+        ],
+        correctIndex: 1,
+        explanation:
+            'A queue follows first-in, first-out processing.',
+      ),
+      CBTQuestionModel(
+        id: _uuid.v4(),
+        courseCode: code,
+        topic: 'Algorithms',
+        question:
+            'Which time complexity best describes quicksort in the average case when partitions are reasonably balanced?',
+        options: const [
+          'O(n)',
+          'O(n log n)',
+          'O(n²) for every input',
+          'O(log n) for the full sort',
+        ],
+        correctIndex: 1,
+        explanation:
+            'Balanced partitioning gives logarithmic levels with linear work across each level.',
+      ),
+      CBTQuestionModel(
+        id: _uuid.v4(),
+        courseCode: code,
+        topic: 'Graphs',
+        question:
+            'Which traversal is normally used to find the shortest path in an unweighted graph?',
+        options: const [
+          'Depth-first search',
+          'Breadth-first search',
+          'Postorder traversal',
+          'Selection sort',
+        ],
+        correctIndex: 1,
+        explanation:
+            'Breadth-first search explores vertices level by level.',
+      ),
+      CBTQuestionModel(
+        id: _uuid.v4(),
+        courseCode: code,
+        topic: 'Complexity Analysis',
+        question:
+            'An algorithm compares every pair of items in a list of size n. What is the dominant time complexity?',
+        options: const [
+          'O(log n)',
+          'O(n)',
+          'O(n log n)',
+          'O(n²)',
+        ],
+        correctIndex: 3,
+        explanation:
+            'Comparing every pair usually creates a nested iteration pattern with quadratic growth.',
       ),
     ];
 
-    if (topic == null || topic == "Mixed") return all;
+    if (topic == null || topic == 'Mixed') return all;
     return all.where((q) => q.topic == topic).toList();
   }
 
   static List<String> topicsForCourse(String courseCode) {
-    return [
-      "Mixed",
-      "Objective / MCQ",
-      "Multiple Choice",
-      "True / False",
-      "Scenario",
+    return const [
+      'Mixed',
+      'Data Structures',
+      'Trees',
+      'Queues and Stacks',
+      'Algorithms',
+      'Graphs',
+      'Complexity Analysis',
     ];
   }
 }
