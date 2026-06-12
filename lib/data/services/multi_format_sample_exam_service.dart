@@ -3,16 +3,23 @@ import '../models/multi_format_exam_models.dart';
 class MultiFormatSampleExamService {
   MultiFormatSampleExamService._();
 
-  static const importedFormats = MultiFormatQuestionType.values;
+  static const importedFormats = [
+    MultiFormatQuestionType.objectiveSingle,
+    MultiFormatQuestionType.objectiveMultiple,
+    MultiFormatQuestionType.fillBlank,
+    MultiFormatQuestionType.essay,
+    MultiFormatQuestionType.whiteboard,
+  ];
 
   static List<MultiFormatQuestion> questions({
     required String courseCode,
     required String topic,
-    List<MultiFormatQuestionType> formats = MultiFormatQuestionType.values,
+    List<MultiFormatQuestionType> formats = importedFormats,
   }) {
     final selected = formats.toSet();
     return _allQuestions(courseCode: courseCode, topic: _topic(topic))
         .where((question) => selected.contains(question.type))
+        .take(5)
         .toList(growable: false);
   }
 
@@ -24,96 +31,68 @@ class MultiFormatSampleExamService {
     required String courseCode,
     required String topic,
   }) {
-    final source = 'Imported K-SLAS CBT sample pack: $courseCode';
+    final source = 'K-SLAS assessment sample pack: $courseCode';
     return [
       MultiFormatQuestion(
-        id: 'mf_obj_single',
+        id: 'mf_single_integrity',
         type: MultiFormatQuestionType.objectiveSingle,
         questionText:
-            'Which feature best supports distance-learning exam continuity?',
+            'Which platform feature is most important for protecting a graded distance-learning assessment?',
         options: const [
-          'Offline autosave',
-          'Removing feedback',
-          'Manual-only scoring',
-          'No identity checks',
+          'Identity verification and live integrity monitoring',
+          'Allowing unlimited device switching',
+          'Disabling answer autosave',
+          'Hiding lecturer feedback permanently',
         ],
         correctIndexes: const [0],
+        points: 1,
         sourceRef: source,
       ),
       MultiFormatQuestion(
-        id: 'mf_obj_multiple',
+        id: 'mf_multi_controls',
         type: MultiFormatQuestionType.objectiveMultiple,
-        questionText: 'Select all safeguards useful in a remote CBT session.',
+        questionText:
+            'Select the controls that should be active during a proctored graded assessment.',
         options: const [
+          'Camera/environment verification',
+          'Copy-and-paste restriction',
           'Question shuffling',
-          'Copy and paste control',
-          'Integrity scoring',
-          'Unlimited account sharing',
+          'Anonymous account sharing',
         ],
         correctIndexes: const [0, 1, 2],
         points: 3,
         sourceRef: source,
       ),
       MultiFormatQuestion(
-        id: 'mf_true_false',
-        type: MultiFormatQuestionType.trueFalse,
-        questionText:
-            'A demo proctoring session may allow the student to proceed after failed verification.',
-        options: const ['True', 'False'],
-        correctIndexes: const [0],
-        sourceRef: source,
-      ),
-      MultiFormatQuestion(
-        id: 'mf_fill_blank',
+        id: 'mf_fill_autosave',
         type: MultiFormatQuestionType.fillBlank,
         questionText:
-            'A distance-learning exam should autosave answers before final ______.',
-        correctTextAnswers: const ['submission', 'submit'],
+            'Before final submission, the platform should continuously ______ student answers to prevent data loss.',
+        correctTextAnswers: const ['autosave', 'auto-save', 'save'],
+        points: 2,
         sourceRef: source,
       ),
       MultiFormatQuestion(
-        id: 'mf_short_answer',
-        type: MultiFormatQuestionType.shortAnswer,
-        questionText:
-            'State two reasons why remote CBT needs both timer and autosave controls.',
-        correctTextAnswers: const ['time', 'autosave', 'continuity'],
-        points: 4,
-        sourceRef: source,
-      ),
-      MultiFormatQuestion(
-        id: 'mf_essay',
+        id: 'mf_essay_resilience',
         type: MultiFormatQuestionType.essay,
         questionText:
-            'Explain how a distance-learning CBT platform should balance demo access, proctoring, offline resilience, and learner feedback.',
-        correctTextAnswers: const ['demo', 'proctoring', 'offline', 'feedback'],
+            'Explain how K-SLAS should combine assessment integrity, offline resilience, and post-submission feedback for distance learners.',
+        correctTextAnswers: const [
+          'integrity',
+          'offline',
+          'autosave',
+          'feedback',
+        ],
         points: 10,
         sourceRef: source,
       ),
       MultiFormatQuestion(
-        id: 'mf_drag_drop',
-        type: MultiFormatQuestionType.dragDrop,
-        questionText:
-            'Match each CBT security signal with the correct response.',
-        dragItems: const [
-          'Failed verification',
-          'Screen recording detected',
-          'Network drop',
-        ],
-        dropTargets: const [
-          'Demo override or retry',
-          'Integrity warning',
-          'Autosave and resume',
-        ],
-        points: 3,
-        sourceRef: source,
-      ),
-      MultiFormatQuestion(
-        id: 'mf_whiteboard',
+        id: 'mf_whiteboard_flow',
         type: MultiFormatQuestionType.whiteboard,
         questionText:
-            'Use the whiteboard to sketch the flow of a remote CBT attempt from login to submission.',
+            'Use the whiteboard to sketch the flow of a remote graded assessment from login to submission.',
         whiteboardPrompt:
-            'Include verification, question delivery, autosave, submission, and feedback.',
+            'Include verification, question delivery, autosave, answer submission, and lecturer feedback.',
         points: 8,
         sourceRef: source,
       ),
