@@ -8,7 +8,6 @@ import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/course_model.dart';
 import '../widgets/assessments_tab.dart';
 import '../widgets/chat_tab.dart';
-import '../widgets/forum_tab.dart';
 import '../widgets/live_class_tab.dart';
 import '../widgets/past_questions_tab.dart';
 import '../widgets/revision_tab.dart';
@@ -36,9 +35,9 @@ class _CourseDetailViewState extends State<CourseDetailView>
   void initState() {
     super.initState();
     final args = (Get.arguments ?? {}) as Map;
-    final initialTab = (args['initialTab'] as int?)?.clamp(0, 7) ?? 0;
+    final initialTab = (args['initialTab'] as int?)?.clamp(0, 6) ?? 0;
     _tabController = TabController(
-      length: 8,
+      length: 7,
       vsync: this,
       initialIndex: initialTab,
     );
@@ -59,7 +58,6 @@ class _CourseDetailViewState extends State<CourseDetailView>
         safeArea: true,
         child: Column(
           children: [
-            // Premium hero header
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               child: _CourseHeroHeader(
@@ -68,22 +66,25 @@ class _CourseDetailViewState extends State<CourseDetailView>
                 onBack: () => Get.back(),
                 onToggleCollapsed: () =>
                     setState(() => _heroCollapsed = !_heroCollapsed),
-                onAskAi: () =>
-                    Get.toNamed(Routes.chat, arguments: {'course': c}),
+                onAskAi: () => Get.toNamed(Routes.chat, arguments: {'course': c}),
                 onCbt: () => _tabController.animateTo(3),
                 onVideoLectures: () => _tabController.animateTo(1),
                 onLiveClass: () => _tabController.animateTo(2),
                 onPastQs: () => _tabController.animateTo(4),
               ),
             ),
-
-            // Premium glass tabs
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              child: _NextBestActionCard(
+                course: c,
+                onPrimary: () => _openRecommendedTab(c),
+                onAssessment: () => _tabController.animateTo(3),
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: _GlassTabBar(controller: _tabController),
             ),
-
-            // Content
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -93,7 +94,6 @@ class _CourseDetailViewState extends State<CourseDetailView>
                   LiveClassTab(course: c),
                   AssessmentsTab(course: c),
                   PastQuestionsTab(course: c),
-                  ForumTab(course: c),
                   ChatTab(course: c),
                   RevisionTab(course: c),
                 ],
@@ -104,6 +104,147 @@ class _CourseDetailViewState extends State<CourseDetailView>
       ),
     );
   }
+
+  void _openRecommendedTab(CourseModel course) {
+    if (course.progress < 45) {
+      _tabController.animateTo(0);
+      return;
+    }
+    if (course.pastQuestions) {
+      _tabController.animateTo(4);
+      return;
+    }
+    _tabController.animateTo(1);
+  }
+}
+
+class _NextBestActionCard extends StatelessWidget {
+  const _NextBestActionCard({
+    required this.course,
+    required this.onPrimary,
+    required this.onAssessment,
+  });
+
+  final CourseModel course;
+  final VoidCallback onPrimary;
+  final VoidCallback onAssessment;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final recommended = _recommendation(course);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.10)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+            color: cs.shadow.withValues(alpha: 0.04),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: cs.primary.withValues(alpha: 0.10),
+            child: Icon(recommended.icon, color: cs.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                'Next best action',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.58),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                recommended.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                recommended.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.66),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            children: [
+              FilledButton(
+                onPressed: onPrimary,
+                child: Text(recommended.action),
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: onAssessment,
+                child: const Text('Assessment'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  _Recommendation _recommendation(CourseModel course) {
+    if (course.progress < 45) {
+      return const _Recommendation(
+        title: 'Continue studying this course',
+        subtitle: 'Build your foundation before attempting graded assessments.',
+        action: 'Study',
+        icon: Icons.menu_book_outlined,
+      );
+    }
+    if (course.pastQuestions) {
+      return const _Recommendation(
+        title: 'Practice past questions',
+        subtitle: 'Use past questions to prepare before your next assessment.',
+        action: 'Practice',
+        icon: Icons.history_edu_outlined,
+      );
+    }
+    return const _Recommendation(
+      title: 'Watch lecture materials',
+      subtitle: 'Review available video lectures and course materials.',
+      action: 'Open',
+      icon: Icons.play_circle_outline_rounded,
+    );
+  }
+}
+
+class _Recommendation {
+  const _Recommendation({
+    required this.title,
+    required this.subtitle,
+    required this.action,
+    required this.icon,
+  });
+
+  final String title;
+  final String subtitle;
+  final String action;
+  final IconData icon;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -198,7 +339,6 @@ class _CourseHeroHeader extends StatelessWidget {
               _FoldBtn(collapsed: collapsed, onTap: onToggleCollapsed),
             ],
           ),
-
           if (collapsed) ...[
             const SizedBox(height: 10),
             ClipRRect(
@@ -210,13 +350,8 @@ class _CourseHeroHeader extends StatelessWidget {
               ),
             ),
           ],
-
-          if (collapsed)
-            const SizedBox.shrink()
-          else ...[
+          if (!collapsed) ...[
             const SizedBox(height: 12),
-
-            // availability pills
             Align(
               alignment: Alignment.centerLeft,
               child: Wrap(
@@ -224,38 +359,19 @@ class _CourseHeroHeader extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _HeroPill(
-                    text: course.notes ? "Notes available" : "No notes yet",
-                    icon: course.notes
-                        ? Icons.check_circle_outline
-                        : Icons.info_outline,
+                    text: course.notes ? 'Notes ready' : 'Notes pending',
+                    icon: course.notes ? Icons.check_circle_outline : Icons.info_outline,
                   ),
                   _HeroPill(
-                    text: course.pastQuestions
-                        ? "Past Qs ready"
-                        : "No past Qs yet",
-                    icon: course.pastQuestions
-                        ? Icons.task_alt_outlined
-                        : Icons.hourglass_bottom_outlined,
+                    text: course.pastQuestions ? 'Past Qs ready' : 'Past Qs pending',
+                    icon: course.pastQuestions ? Icons.task_alt_outlined : Icons.hourglass_bottom_outlined,
                   ),
-                  _HeroPill(
-                    text: "Citations enabled",
-                    icon: Icons.verified_outlined,
-                  ),
-                  const _HeroPill(
-                    text: "Video lecture uploads ready",
-                    icon: Icons.play_circle_outline_rounded,
-                  ),
-                  const _HeroPill(
-                    text: "Live class lesson ready",
-                    icon: Icons.videocam_outlined,
-                  ),
+                  const _HeroPill(text: 'AI citation mode', icon: Icons.verified_outlined),
+                  const _HeroPill(text: 'Offline friendly', icon: Icons.cloud_off_outlined),
                 ],
               ),
             ),
-
             const SizedBox(height: 14),
-
-            // progress bar
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
@@ -264,73 +380,31 @@ class _CourseHeroHeader extends StatelessWidget {
                 backgroundColor: Colors.white.withValues(alpha: 0.18),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // quick actions
             LayoutBuilder(
               builder: (context, constraints) {
                 const spacing = 10.0;
                 final columns = constraints.maxWidth >= 960 ? 5 : 2;
-                final itemWidth =
-                    (constraints.maxWidth - (spacing * (columns - 1))) /
-                    columns;
+                final itemWidth = (constraints.maxWidth - (spacing * (columns - 1))) / columns;
 
                 return Wrap(
                   spacing: spacing,
                   runSpacing: spacing,
                   children: [
-                    SizedBox(
-                      width: itemWidth,
-                      child: _HeroAction(
-                        icon: Icons.chat_bubble_outline,
-                        label: "Ask AI",
-                        onTap: onAskAi,
-                      ),
-                    ),
-                    SizedBox(
-                      width: itemWidth,
-                      child: _HeroAction(
-                        icon: Icons.play_circle_outline_rounded,
-                        label: "Lectures",
-                        onTap: onVideoLectures,
-                      ),
-                    ),
-                    SizedBox(
-                      width: itemWidth,
-                      child: _HeroAction(
-                        icon: Icons.videocam_outlined,
-                        label: "Live Class",
-                        onTap: onLiveClass,
-                      ),
-                    ),
-                    SizedBox(
-                      width: itemWidth,
-                      child: _HeroAction(
-                        icon: Icons.task_alt_outlined,
-                        label: "CBT",
-                        onTap: onCbt,
-                      ),
-                    ),
-                    SizedBox(
-                      width: itemWidth,
-                      child: _HeroAction(
-                        icon: Icons.history_edu_outlined,
-                        label: "Past Qs",
-                        onTap: onPastQs,
-                      ),
-                    ),
+                    SizedBox(width: itemWidth, child: _HeroAction(icon: Icons.menu_book_outlined, label: 'Study', onTap: onVideoLectures)),
+                    SizedBox(width: itemWidth, child: _HeroAction(icon: Icons.play_circle_outline_rounded, label: 'Video', onTap: onVideoLectures)),
+                    SizedBox(width: itemWidth, child: _HeroAction(icon: Icons.videocam_outlined, label: 'Live', onTap: onLiveClass)),
+                    SizedBox(width: itemWidth, child: _HeroAction(icon: Icons.task_alt_outlined, label: 'Tests', onTap: onCbt)),
+                    SizedBox(width: itemWidth, child: _HeroAction(icon: Icons.history_edu_outlined, label: 'Past Qs', onTap: onPastQs)),
                   ],
                 );
               },
             ),
-
             const SizedBox(height: 8),
-
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Academic rule: answers outside your materials will return "Not in your materials".',
+                'Student rule: AI answers must stay inside your course materials and citations.',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.90),
                   fontWeight: FontWeight.w600,
@@ -366,9 +440,7 @@ class _FoldBtn extends StatelessWidget {
             border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
           ),
           child: Icon(
-            collapsed
-                ? Icons.keyboard_arrow_down_rounded
-                : Icons.keyboard_arrow_up_rounded,
+            collapsed ? Icons.keyboard_arrow_down_rounded : Icons.keyboard_arrow_up_rounded,
             color: Colors.white,
           ),
         ),
@@ -417,7 +489,7 @@ class _ProgressPill extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
       ),
       child: Text(
-        "$progress% done",
+        '$progress% done',
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w900,
@@ -538,14 +610,13 @@ class _GlassTabBar extends StatelessWidget {
               border: Border.all(color: cs.primary.withValues(alpha: 0.16)),
             ),
             tabs: const [
-              Tab(text: 'Study'),
-              Tab(text: 'Lectures'),
-              Tab(text: 'Live Class'),
-              Tab(text: 'Assessments'),
-              Tab(text: 'Past Qs'),
-              Tab(text: 'Forum'),
-              Tab(text: 'Chat'),
-              Tab(text: 'Revision'),
+              Tab(icon: Icon(Icons.menu_book_outlined), text: 'Study'),
+              Tab(icon: Icon(Icons.play_circle_outline_rounded), text: 'Video'),
+              Tab(icon: Icon(Icons.live_tv_outlined), text: 'Live'),
+              Tab(icon: Icon(Icons.fact_check_outlined), text: 'Tests'),
+              Tab(icon: Icon(Icons.history_edu_outlined), text: 'Qs'),
+              Tab(icon: Icon(Icons.smart_toy_outlined), text: 'AI'),
+              Tab(icon: Icon(Icons.psychology_outlined), text: 'Revise'),
             ],
           ),
         ),
