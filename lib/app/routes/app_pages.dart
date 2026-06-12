@@ -21,6 +21,7 @@ import '../../modules/exam/binding/exam_binding.dart';
 import '../../modules/exam/view/exam_result_view.dart';
 import '../../modules/exam/view/exam_run_view.dart';
 import '../../modules/exam/view/exam_setup_view.dart';
+import '../../modules/notifications/view/student_notifications_view.dart';
 import '../../modules/noticeboard/binding/noticeboard_binding.dart';
 import '../../modules/noticeboard/view/noticeboard_view.dart';
 import '../../modules/practice/binding/practice_binding.dart';
@@ -147,6 +148,10 @@ class AppPages {
       name: Routes.results,
       page: () => const ResultsView(),
       binding: ResultsBinding(),
+    ),
+    GetPage(
+      name: Routes.notifications,
+      page: () => const StudentNotificationsView(),
     ),
     GetPage(
       name: '/fillblank/start',
