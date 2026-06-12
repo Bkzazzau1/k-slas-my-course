@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import '../../../core/whiteboard/whiteboard_editor_sheet.dart';
 import '../../../core/whiteboard/whiteboard_models.dart';
+import '../../../core/widgets/assessment_calculator.dart';
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/exam_models.dart';
 import '../../../data/services/graded_session_template_service.dart';
@@ -53,10 +54,8 @@ class _CBTTakeViewState extends State<CBTTakeView> {
     final sessionType =
         (args['sessionType'] as String?) ?? SessionType.assessment;
     final isGradedAssessment =
-        sessionType == SessionType.assessment &&
-        _gradingType == GradingType.graded;
-    final backendTemplate =
-        courseCode.trim().isEmpty ||
+        sessionType == SessionType.assessment && _gradingType == GradingType.graded;
+    final backendTemplate = courseCode.trim().isEmpty ||
             (_questionSource != QuestionSourceType.lecturerAdmin &&
                 _gradingType != GradingType.graded)
         ? null
@@ -68,11 +67,9 @@ class _CBTTakeViewState extends State<CBTTakeView> {
         ? ExamDeliveryMode.remoteProctored
         : (backendTemplate?.deliveryMode ?? requestedDeliveryMode);
     _useProctoring =
-        isGradedAssessment ||
-        (_examMode && _deliveryMode == ExamDeliveryMode.remoteProctored);
+        isGradedAssessment || (_examMode && _deliveryMode == ExamDeliveryMode.remoteProctored);
     _whiteboardEnabled = args['whiteboardEnabled'] == true;
-    _whiteboardRequired =
-        _whiteboardEnabled && args['whiteboardRequired'] == true;
+    _whiteboardRequired = _whiteboardEnabled && args['whiteboardRequired'] == true;
     _whiteboardPrompt = args['whiteboardPrompt']?.toString();
 
     if (_examMode && Get.isRegistered<ExamController>()) {
@@ -95,8 +92,7 @@ class _CBTTakeViewState extends State<CBTTakeView> {
     final sessionType =
         (args['sessionType'] as String?) ?? SessionType.assessment;
     final isGradedAssessment =
-        sessionType == SessionType.assessment &&
-        _gradingType == GradingType.graded;
+        sessionType == SessionType.assessment && _gradingType == GradingType.graded;
 
     if (_useProctoring) {
       proctoring.registerExamTimerHooks(
@@ -107,8 +103,7 @@ class _CBTTakeViewState extends State<CBTTakeView> {
 
     if (isGradedAssessment &&
         (!proctoring.shieldActive.value ||
-            proctoring.currentLevel.value !=
-                AssessmentIntegrityLevel.gradedAssessment)) {
+            proctoring.currentLevel.value != AssessmentIntegrityLevel.gradedAssessment)) {
       _ownsProctoringSession = true;
       final verified = await proctoring.startAssessmentSequence(
         '$courseCode-assessment-${DateTime.now().millisecondsSinceEpoch}',
@@ -120,7 +115,7 @@ class _CBTTakeViewState extends State<CBTTakeView> {
         },
       );
       if (!verified) {
-        if (mounted) Get.back();
+        if (mounted) Get.back<void>();
         return;
       }
     }
@@ -140,15 +135,14 @@ class _CBTTakeViewState extends State<CBTTakeView> {
       sessionWhiteboardPrompt: _whiteboardPrompt,
       sessionWhiteboardStrokeCount: _whiteboardStrokeCount,
       sessionShuffleQuestions: args['shuffleQuestions'] != false,
-      sessionLockCopyPaste: args['lockCopyPaste'] != false,
-      sessionCalculatorEnabled: args['calculatorEnabled'] == true,
+      sessionLockCopyPaste: args['lockCopyPaste'] == true,
+      sessionCalculatorEnabled: true,
     );
 
     if (_examMode) {
       if (_useProctoring &&
           (!proctoring.shieldActive.value ||
-              proctoring.currentLevel.value !=
-                  AssessmentIntegrityLevel.highStakesExam)) {
+              proctoring.currentLevel.value != AssessmentIntegrityLevel.highStakesExam)) {
         _ownsProctoringSession = true;
         await proctoring.startSession(
           level: AssessmentIntegrityLevel.highStakesExam,
@@ -158,9 +152,7 @@ class _CBTTakeViewState extends State<CBTTakeView> {
       return;
     }
 
-    if (!_useProctoring) {
-      return;
-    }
+    if (!_useProctoring) return;
 
     _ownsProctoringSession = true;
     await proctoring.startSession(
@@ -187,9 +179,7 @@ class _CBTTakeViewState extends State<CBTTakeView> {
 
   @override
   void dispose() {
-    if (_useProctoring) {
-      proctoring.clearExamTimerHooks();
-    }
+    if (_useProctoring) proctoring.clearExamTimerHooks();
     if (_ownsProctoringSession) {
       unawaited(proctoring.stopSession(silent: true));
     }
@@ -209,7 +199,7 @@ class _CBTTakeViewState extends State<CBTTakeView> {
 
   Future<void> _leaveAttempt() async {
     if (!_examMode) {
-      Get.back();
+      Get.back<void>();
       return;
     }
 
@@ -217,44 +207,28 @@ class _CBTTakeViewState extends State<CBTTakeView> {
       AlertDialog(
         title: const Text('Leave objective section?'),
         content: const Text(
-          'This section has not been submitted. Leaving returns to the exam section list.',
+          'This section has not been submitted. You can stay, or return to the section list.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(result: false),
-            child: const Text('Stay'),
-          ),
-          FilledButton(
-            onPressed: () => Get.back(result: true),
-            child: const Text('Leave'),
-          ),
+          TextButton(onPressed: () => Get.back(result: false), child: const Text('Stay')),
+          FilledButton(onPressed: () => Get.back(result: true), child: const Text('Leave')),
         ],
       ),
     );
 
-    if (leave == true) {
-      Get.back(result: null);
-    }
+    if (leave == true) Get.back(result: null);
   }
 
   List<WhiteboardStroke> get _whiteboardStrokes {
-    if (_examController != null) {
-      return _examController!.whiteboardStrokes.toList();
-    }
+    if (_examController != null) return _examController!.whiteboardStrokes.toList();
     return _localWhiteboardStrokes;
   }
 
-  int get _whiteboardStrokeCount {
-    return _whiteboardStrokes.where((s) => s.isUsable).length;
-  }
-
-  bool get _isWhiteboardMissingRequired {
-    return _whiteboardRequired && _whiteboardStrokeCount == 0;
-  }
+  int get _whiteboardStrokeCount => _whiteboardStrokes.where((s) => s.isUsable).length;
+  bool get _isWhiteboardMissingRequired => _whiteboardRequired && _whiteboardStrokeCount == 0;
 
   Future<void> _openWhiteboard() async {
     if (!_whiteboardEnabled) return;
-
     final strokes = await Get.bottomSheet<List<WhiteboardStroke>>(
       WhiteboardEditorSheet(
         title: 'Assessment Whiteboard',
@@ -264,9 +238,7 @@ class _CBTTakeViewState extends State<CBTTakeView> {
       isScrollControlled: true,
       ignoreSafeArea: false,
     );
-
     if (strokes == null) return;
-
     if (_examController != null) {
       _examController!.saveWhiteboardStrokes(strokes);
     } else {
@@ -285,7 +257,24 @@ class _CBTTakeViewState extends State<CBTTakeView> {
       );
       return;
     }
-    await controller.submit(returnAttempt: _examMode);
+    final unanswered = controller.questions.length - controller.answers.length;
+    final submit = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text(unanswered > 0 ? 'Submit with unanswered questions?' : 'Submit section?'),
+        content: Text(
+          unanswered > 0
+              ? 'You still have $unanswered unanswered question${unanswered == 1 ? '' : 's'}. Submit now?'
+              : 'All questions have been answered. Submit this section now?',
+        ),
+        actions: [
+          TextButton(onPressed: () => Get.back(result: false), child: const Text('Review')),
+          FilledButton(onPressed: () => Get.back(result: true), child: const Text('Submit')),
+        ],
+      ),
+    );
+    if (submit == true) {
+      await controller.submit(returnAttempt: _examMode);
+    }
   }
 
   @override
@@ -304,6 +293,8 @@ class _CBTTakeViewState extends State<CBTTakeView> {
           child: Obx(() {
             final questions = controller.questions;
             final hasQuestions = questions.isNotEmpty;
+            final answered = controller.answers.length;
+            final remaining = (questions.length - answered).clamp(0, questions.length);
 
             return ListView(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
@@ -318,7 +309,12 @@ class _CBTTakeViewState extends State<CBTTakeView> {
                   onBack: _leaveAttempt,
                 ),
                 const SizedBox(height: 12),
-                _DeliveryModeStrip(useProctoring: _useProctoring),
+                _ToolStrip(
+                  useProctoring: _useProctoring,
+                  answered: answered,
+                  remaining: remaining,
+                  total: questions.length,
+                ),
                 const SizedBox(height: 12),
                 if (_useProctoring) ...[
                   Obx(
@@ -340,7 +336,6 @@ class _CBTTakeViewState extends State<CBTTakeView> {
                   ),
                   const SizedBox(height: 12),
                 ],
-
                 if (!hasQuestions)
                   _glassCard(
                     context,
@@ -349,33 +344,17 @@ class _CBTTakeViewState extends State<CBTTakeView> {
                       children: [
                         Icon(Icons.quiz_outlined, size: 40, color: cs.primary),
                         const SizedBox(height: 10),
-                        const Text(
-                          'No questions available',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 16,
-                          ),
-                        ),
+                        const Text('No questions available', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                         const SizedBox(height: 6),
-                        Text(
-                          'Try a different topic or course.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: cs.onSurface.withValues(alpha: 0.7),
-                          ),
-                        ),
+                        Text('Try a different topic or course.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7))),
                         const SizedBox(height: 12),
-                        OutlinedButton(
-                          onPressed: () => Get.back(),
-                          child: const Text('Go back'),
-                        ),
+                        OutlinedButton(onPressed: () => Get.back<void>(), child: const Text('Go back')),
                       ],
                     ),
                   )
                 else ...[
                   _QuestionCard(q: controller.current),
                   const SizedBox(height: 12),
-
                   ...List.generate(controller.current.options.length, (i) {
                     final selected = controller.selectedIndex.value == i;
                     return _OptionTile(
@@ -385,50 +364,31 @@ class _CBTTakeViewState extends State<CBTTakeView> {
                       onTap: () => controller.pick(i),
                     );
                   }),
-
-                  const SizedBox(height: 12),
-                  if (controller.current.sourceLabel != null)
-                    Text(
-                      'Source: ${controller.current.sourceLabel}',
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.65),
-                      ),
-                    ),
-
                   const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: controller.index.value == 0
-                              ? null
-                              : controller.prev,
+                          onPressed: controller.index.value == 0 ? null : controller.prev,
                           child: const Text('Previous'),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: FilledButton(
-                          onPressed:
-                              controller.index.value == questions.length - 1
+                          onPressed: controller.index.value == questions.length - 1
                               ? _submitWithWhiteboardGuard
                               : controller.next,
-                          child: Text(
-                            controller.index.value == questions.length - 1
-                                ? 'Submit'
-                                : 'Next',
-                          ),
+                          child: Text(controller.index.value == questions.length - 1 ? 'Submit' : 'Next'),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  TextButton(
+                  TextButton.icon(
                     onPressed: _submitWithWhiteboardGuard,
-                    child: Text(
-                      'End attempt',
-                      style: TextStyle(color: cs.error),
-                    ),
+                    icon: const Icon(Icons.stop_circle_outlined),
+                    label: Text('End attempt', style: TextStyle(color: cs.error)),
                   ),
                 ],
               ],
@@ -440,14 +400,71 @@ class _CBTTakeViewState extends State<CBTTakeView> {
   }
 }
 
-class _IntegrityStrip extends StatelessWidget {
-  const _IntegrityStrip({
-    required this.score,
-    required this.moved,
-    required this.recording,
-    required this.paused,
+class _ToolStrip extends StatelessWidget {
+  const _ToolStrip({
+    required this.useProctoring,
+    required this.answered,
+    required this.remaining,
+    required this.total,
   });
 
+  final bool useProctoring;
+  final int answered;
+  final int remaining;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _glassCard(
+      context,
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _SmallStatus(icon: Icons.check_circle_outline, text: 'Answered $answered/$total'),
+          _SmallStatus(icon: Icons.pending_actions_rounded, text: 'Remaining $remaining'),
+          _SmallStatus(
+            icon: useProctoring ? Icons.security_outlined : Icons.school_outlined,
+            text: useProctoring ? 'Proctored' : 'Normal',
+          ),
+          const AssessmentCalculatorButton(),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallStatus extends StatelessWidget {
+  const _SmallStatus({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: cs.primary),
+          const SizedBox(width: 6),
+          Text(text, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+}
+
+class _IntegrityStrip extends StatelessWidget {
+  const _IntegrityStrip({required this.score, required this.moved, required this.recording, required this.paused});
   final int score;
   final bool moved;
   final bool recording;
@@ -456,12 +473,7 @@ class _IntegrityStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final issues = <String>[
-      if (moved) 'Movement',
-      if (recording) 'Recording',
-      if (paused) 'Timer paused',
-    ];
-
+    final issues = <String>[if (moved) 'Movement', if (recording) 'Recording', if (paused) 'Timer paused'];
     return _glassCard(
       context,
       child: Row(
@@ -470,50 +482,8 @@ class _IntegrityStrip extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              issues.isEmpty
-                  ? 'Integrity score: $score'
-                  : 'Integrity score: $score • ${issues.join(", ")}',
-              style: TextStyle(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DeliveryModeStrip extends StatelessWidget {
-  const _DeliveryModeStrip({required this.useProctoring});
-
-  final bool useProctoring;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final color = useProctoring ? cs.primary : cs.onSurface;
-    final icon = useProctoring
-        ? Icons.security_outlined
-        : Icons.apartment_outlined;
-    final text = useProctoring
-        ? 'Remote proctored exam. Device checks required.'
-        : 'Distance self-practice. Device proctoring is off.';
-
-    return _glassCard(
-      context,
-      child: Row(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w800,
-              ),
+              issues.isEmpty ? 'Integrity score: $score' : 'Integrity score: $score • ${issues.join(', ')}',
+              style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800),
             ),
           ),
         ],
@@ -523,13 +493,7 @@ class _DeliveryModeStrip extends StatelessWidget {
 }
 
 class _WhiteboardStrip extends StatelessWidget {
-  const _WhiteboardStrip({
-    required this.required,
-    required this.prompt,
-    required this.strokeCount,
-    required this.onOpen,
-  });
-
+  const _WhiteboardStrip({required this.required, required this.prompt, required this.strokeCount, required this.onOpen});
   final bool required;
   final String? prompt;
   final int strokeCount;
@@ -539,7 +503,6 @@ class _WhiteboardStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final hasSketch = strokeCount > 0;
-
     return _glassCard(
       context,
       child: Column(
@@ -551,67 +514,25 @@ class _WhiteboardStrip extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  required
-                      ? 'Whiteboard diagram is required.'
-                      : 'Whiteboard diagram is available.',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  required ? 'Whiteboard diagram is required.' : 'Whiteboard diagram is available.',
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: (hasSketch ? cs.primary : cs.secondary).withValues(
-                    alpha: 0.12,
-                  ),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  hasSketch ? 'Added' : 'Pending',
-                  style: TextStyle(
-                    color: hasSketch ? cs.primary : cs.secondary,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
+              _SmallStatus(icon: hasSketch ? Icons.check : Icons.pending, text: hasSketch ? 'Added' : 'Pending'),
             ],
           ),
           if (prompt != null && prompt!.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(
-              prompt!.trim(),
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.72),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
+            Text(prompt!.trim(), style: TextStyle(color: cs.onSurface.withValues(alpha: 0.72), fontWeight: FontWeight.w700, fontSize: 12)),
           ],
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                hasSketch
-                    ? '$strokeCount stroke(s) captured'
-                    : 'No drawing captured yet',
-                style: TextStyle(
-                  color: cs.onSurface.withValues(alpha: 0.72),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 12,
-                ),
-              ),
-              const Spacer(),
-              OutlinedButton.icon(
-                onPressed: onOpen,
-                icon: const Icon(Icons.edit_outlined),
-                label: Text(hasSketch ? 'Edit whiteboard' : 'Open whiteboard'),
-              ),
-            ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.edit_outlined),
+              label: Text(hasSketch ? 'Edit whiteboard' : 'Open whiteboard'),
+            ),
           ),
         ],
       ),
@@ -620,16 +541,7 @@ class _WhiteboardStrip extends StatelessWidget {
 }
 
 class _HeroHeader extends StatelessWidget {
-  const _HeroHeader({
-    required this.courseCode,
-    required this.index,
-    required this.total,
-    required this.mode,
-    required this.secondsLeft,
-    required this.paused,
-    required this.onBack,
-  });
-
+  const _HeroHeader({required this.courseCode, required this.index, required this.total, required this.mode, required this.secondsLeft, required this.paused, required this.onBack});
   final String courseCode;
   final int index;
   final int total;
@@ -643,67 +555,23 @@ class _HeroHeader extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final mm = (secondsLeft ~/ 60).toString().padLeft(2, '0');
     final ss = (secondsLeft % 60).toString().padLeft(2, '0');
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cs.primary.withValues(alpha: 0.95),
-            cs.secondary.withValues(alpha: 0.80),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-            color: cs.primary.withValues(alpha: 0.18),
-          ),
-        ],
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [cs.primary.withValues(alpha: 0.95), cs.secondary.withValues(alpha: 0.80)]),
       ),
       child: Row(
         children: [
-          InkWell(
-            onTap: onBack,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-              ),
-            ),
-          ),
+          IconButton.filledTonal(onPressed: onBack, icon: const Icon(Icons.arrow_back_ios_new_rounded)),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'CBT Practice',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
-                  ),
-                ),
+                const Text('Objective section', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
                 const SizedBox(height: 6),
-                Text(
-                  '$courseCode - Q ${index + 1}/$total',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text('$courseCode • Question ${total == 0 ? 0 : index + 1}/$total', style: TextStyle(color: Colors.white.withValues(alpha: 0.92), fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -711,19 +579,11 @@ class _HeroHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: paused
-                    ? const Color(0xFFD32F2F).withValues(alpha: 0.92)
-                    : Colors.white.withValues(alpha: 0.18),
+                color: paused ? const Color(0xFFD32F2F).withValues(alpha: 0.92) : Colors.white.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
               ),
-              child: Text(
-                paused ? 'PAUSED' : '$mm:$ss',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+              child: Text(paused ? 'PAUSED' : '$mm:$ss', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
             ),
         ],
       ),
@@ -738,21 +598,14 @@ class _QuestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return _glassCard(
       context,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            q.topic,
-            style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900),
-          ),
+          Text(q.topic, style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          Text(
-            q.question,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-          ),
+          Text(q.question, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
         ],
       ),
     );
@@ -760,13 +613,7 @@ class _QuestionCard extends StatelessWidget {
 }
 
 class _OptionTile extends StatelessWidget {
-  const _OptionTile({
-    required this.label,
-    required this.text,
-    required this.selected,
-    required this.onTap,
-  });
-
+  const _OptionTile({required this.label, required this.text, required this.selected, required this.onTap});
   final String label;
   final String text;
   final bool selected;
@@ -775,13 +622,8 @@ class _OptionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final bg = selected
-        ? cs.primary.withValues(alpha: 0.12)
-        : cs.onSurface.withValues(alpha: 0.03);
-    final border = selected
-        ? cs.primary.withValues(alpha: 0.22)
-        : cs.onSurface.withValues(alpha: 0.06);
-
+    final bg = selected ? cs.primary.withValues(alpha: 0.12) : cs.onSurface.withValues(alpha: 0.03);
+    final border = selected ? cs.primary.withValues(alpha: 0.22) : cs.onSurface.withValues(alpha: 0.06);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: InkWell(
@@ -789,41 +631,18 @@ class _OptionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Container(
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: border),
-          ),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18), border: Border.all(color: border)),
           child: Row(
             children: [
               Container(
                 width: 36,
                 height: 36,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? cs.primary
-                      : cs.onSurface.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                decoration: BoxDecoration(color: selected ? cs.primary : cs.onSurface.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(12)),
                 alignment: Alignment.center,
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: selected ? Colors.white : cs.onSurface,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: Text(label, style: TextStyle(color: selected ? Colors.white : cs.onSurface, fontWeight: FontWeight.w900)),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              Expanded(child: Text(text, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700))),
             ],
           ),
         ),
@@ -844,13 +663,6 @@ Widget _glassCard(BuildContext context, {required Widget child}) {
           color: cs.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-          boxShadow: [
-            BoxShadow(
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-              color: cs.onSurface.withValues(alpha: 0.04),
-            ),
-          ],
         ),
         child: child,
       ),
