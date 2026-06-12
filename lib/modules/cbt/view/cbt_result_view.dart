@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:get/get.dart';
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/cbt_models.dart';
 import '../../../data/models/exam_models.dart';
+import '../../../data/services/submission_history_service.dart';
 import '../../proctoring/controller/proctoring_controller.dart';
 
 class CBTResultView extends StatelessWidget {
@@ -24,6 +26,14 @@ class CBTResultView extends StatelessWidget {
         ? 'Submitted Successfully'
         : 'Submitted - Under Review';
     final receipt = 'KSLAS-${attempt.endedAt.millisecondsSinceEpoch.toString().substring(5)}';
+
+    unawaited(SubmissionHistoryService.saveCbtAttempt(
+      attempt,
+      receiptNumber: receipt,
+      status: status,
+      integrityScore: integrityScore,
+      warningCount: warningCount,
+    ));
 
     return Scaffold(
       body: LuxuryScaffold(
