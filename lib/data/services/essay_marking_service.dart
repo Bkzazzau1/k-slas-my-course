@@ -54,7 +54,7 @@ class EssayMarkingService {
     }
 
     final ratio = foundCount / expected.length;
-    var scored = (total * ratio).round().clamp(0, total);
+    final scored = (total * ratio).round().clamp(0, total) as int;
 
     final missing = checks.where((c) => !c.found).map((c) => c.keyword).toList();
     final matched = checks.where((c) => c.found).map((c) => c.keyword).toList();
@@ -64,24 +64,20 @@ class EssayMarkingService {
       scoredMarks: scored,
       keywordChecks: checks,
       feedback: _buildFeedback(
-        question: question,
         scored: scored,
         total: total,
         matched: matched,
         missing: missing,
-        studentAnswer: answer,
       ),
       citations: const [],
     );
   }
 
   String _buildFeedback({
-    required TheoryQuestionModel question,
     required int scored,
     required int total,
     required List<String> matched,
     required List<String> missing,
-    required String studentAnswer,
   }) {
     final buf = StringBuffer();
 
