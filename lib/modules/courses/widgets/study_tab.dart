@@ -23,6 +23,7 @@ class StudyTab extends StatelessWidget {
     final profile = StudentProfileStorage.load();
     final category = studentCategoryFromStorage(profile?.studentCategoryKey);
     final studentId = _studentId(profile);
+    final weeklyNotes = _weeklyNotesFor(course.code);
 
     return Obx(() {
       final allLectures = controller.lecturesForCourse(course.code);
@@ -42,7 +43,7 @@ class StudyTab extends StatelessWidget {
           final loadingMaterials = snapshot.connectionState == ConnectionState.waiting;
           final watched = lectures.where((lecture) => lecture.isWatchedBy(studentId)).length;
           final downloadable = materials.where((material) => material.allowDownload).length;
-          final totalItems = materials.length + lectures.length;
+          final totalItems = materials.length + lectures.length + weeklyNotes.length;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
@@ -52,7 +53,8 @@ class StudyTab extends StatelessWidget {
                 materialCount: materials.length,
                 lectureCount: lectures.length,
                 watchedCount: watched,
-                downloadableCount: downloadable,
+                downloadableCount: downloadable + weeklyNotes.length,
+                weeklyNoteCount: weeklyNotes.length,
               ),
               const SizedBox(height: 12),
               _StudyActionRow(course: course),
@@ -66,12 +68,19 @@ class StudyTab extends StatelessWidget {
                 _EmptyStudyState(courseCode: course.code)
               else ...[
                 _SectionHeader(
+                  title: 'Weekly study notes',
+                  subtitle: '${weeklyNotes.length} weeks • structured notes for the semester',
+                ),
+                const SizedBox(height: 10),
+                for (final note in weeklyNotes) _WeeklyNoteCard(note: note),
+                const SizedBox(height: 10),
+                _SectionHeader(
                   title: 'Course materials',
                   subtitle: '${materials.length} item${materials.length == 1 ? '' : 's'} • $downloadable offline-ready',
                 ),
                 const SizedBox(height: 10),
                 if (materials.isEmpty)
-                  _MiniEmpty(message: 'No document or link material has been published yet.')
+                  _MiniEmpty(message: 'No additional document or link material has been published yet.')
                 else
                   for (final material in materials) _MaterialStudyTile(material: material),
                 const SizedBox(height: 10),
@@ -103,6 +112,49 @@ class StudyTab extends StatelessWidget {
     if (email.isNotEmpty) return email.toLowerCase();
     return 'student-demo';
   }
+
+  List<_WeeklyNote> _weeklyNotesFor(String courseCode) {
+    final normalized = courseCode.trim().toUpperCase();
+    final topics = <String>[
+      'Course introduction and learning outcomes',
+      'Core concepts and key definitions',
+      'Worked examples and lecturer explanations',
+      'Applied problem-solving session',
+      'Case study and class discussion notes',
+      'Mid-semester revision guide',
+      'Advanced concepts and common mistakes',
+      'Practice questions with explanations',
+      'Assessment preparation notes',
+      'Past-question review and solutions',
+      'Final revision checklist',
+      'Exam focus and summary notes',
+    ];
+
+    if (normalized.contains('CSC')) {
+      topics[0] = 'Introduction to algorithms and data structures';
+      topics[1] = 'Arrays, linked lists and memory representation';
+      topics[2] = 'Stacks, queues and recursion notes';
+      topics[3] = 'Trees, binary search trees and traversal';
+      topics[4] = 'Graphs, BFS, DFS and shortest paths';
+      topics[5] = 'Sorting and searching revision guide';
+      topics[6] = 'Hashing, maps and collision handling';
+      topics[7] = 'Complexity analysis and Big-O practice';
+      topics[8] = 'CBT practice questions with explanations';
+      topics[9] = 'Past-question solution notes';
+      topics[10] = 'Final revision checklist';
+      topics[11] = 'Exam focus and common mistakes';
+    }
+
+    return List.generate(
+      topics.length,
+      (index) => _WeeklyNote(
+        week: index + 1,
+        title: topics[index],
+        status: index < 5 ? _WeekStatus.available : index == 5 ? _WeekStatus.current : _WeekStatus.locked,
+        offlineReady: index < 6,
+      ),
+    );
+  }
 }
 
 class _StudyOverviewCard extends StatelessWidget {
@@ -112,6 +164,7 @@ class _StudyOverviewCard extends StatelessWidget {
     required this.lectureCount,
     required this.watchedCount,
     required this.downloadableCount,
+    required this.weeklyNoteCount,
   });
 
   final CourseModel course;
@@ -119,6 +172,7 @@ class _StudyOverviewCard extends StatelessWidget {
   final int lectureCount;
   final int watchedCount;
   final int downloadableCount;
+  final int weeklyNoteCount;
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +219,7 @@ class _StudyOverviewCard extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
+          _HeroPill(label: '$weeklyNoteCount weekly notes'),
           _HeroPill(label: '$materialCount materials'),
           _HeroPill(label: '$lectureCount videos'),
           _HeroPill(label: '$watchedCount watched'),
@@ -189,6 +244,98 @@ class _HeroPill extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
       child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+    );
+  }
+}
+
+class _WeeklyNoteCard extends StatelessWidget {
+  const _WeeklyNoteCard({required this.note});
+  final _WeeklyNote note;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = switch (note.status) {
+      _WeekStatus.available => Colors.green.shade700,
+      _WeekStatus.current => Colors.orange.shade700,
+      _WeekStatus.locked => cs.onSurface.withValues(alpha: 0.48),
+    };
+    final statusText = switch (note.status) {
+      _WeekStatus.available => 'Available',
+      _WeekStatus.current => 'Current week',
+      _WeekStatus.locked => 'Locked',
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.14)),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+            color: cs.shadow.withValues(alpha: 0.035),
+          ),
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 46,
+            height: 46,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text('W${note.week}', style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(note.title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
+              const SizedBox(height: 5),
+              Text(
+                'Weekly lecturer note with key points, examples, and revision focus.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30),
+              ),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _Badge(text: statusText, color: color),
+          _Badge(text: note.offlineReady ? 'Offline ready' : 'Online only', color: note.offlineReady ? Colors.green.shade700 : cs.primary),
+          _Badge(text: 'Study note', color: cs.secondary),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: note.status == _WeekStatus.locked
+                  ? null
+                  : () => Get.snackbar('Weekly note', 'Opening Week ${note.week} note.', snackPosition: SnackPosition.BOTTOM),
+              icon: const Icon(Icons.menu_book_outlined),
+              label: const Text('Open note'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: note.offlineReady
+                  ? () => Get.snackbar('Offline saved', 'Week ${note.week} note is ready offline.', snackPosition: SnackPosition.BOTTOM)
+                  : null,
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Save offline'),
+            ),
+          ),
+        ]),
+      ]),
     );
   }
 }
@@ -516,3 +663,19 @@ class _Badge extends StatelessWidget {
     );
   }
 }
+
+class _WeeklyNote {
+  const _WeeklyNote({
+    required this.week,
+    required this.title,
+    required this.status,
+    required this.offlineReady,
+  });
+
+  final int week;
+  final String title;
+  final _WeekStatus status;
+  final bool offlineReady;
+}
+
+enum _WeekStatus { available, current, locked }
