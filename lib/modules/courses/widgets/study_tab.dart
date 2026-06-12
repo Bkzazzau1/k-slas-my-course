@@ -9,6 +9,7 @@ import '../../../data/models/student_profile_model.dart';
 import '../../../data/models/video_lecture_models.dart';
 import '../../../data/services/course_material_service.dart';
 import '../../../data/services/student_profile_storage.dart';
+import '../view/weekly_note_reader_view.dart';
 import '../../video_lectures/controller/video_lectures_controller.dart';
 
 class StudyTab extends StatelessWidget {
@@ -72,7 +73,7 @@ class StudyTab extends StatelessWidget {
                   subtitle: '${weeklyNotes.length} weeks • structured notes for the semester',
                 ),
                 const SizedBox(height: 10),
-                for (final note in weeklyNotes) _WeeklyNoteCard(note: note),
+                for (final note in weeklyNotes) _WeeklyNoteCard(note: note, courseCode: course.code),
                 const SizedBox(height: 10),
                 _SectionHeader(
                   title: 'Course materials',
@@ -249,8 +250,9 @@ class _HeroPill extends StatelessWidget {
 }
 
 class _WeeklyNoteCard extends StatelessWidget {
-  const _WeeklyNoteCard({required this.note});
+  const _WeeklyNoteCard({required this.note, required this.courseCode});
   final _WeeklyNote note;
+  final String courseCode;
 
   @override
   Widget build(BuildContext context) {
@@ -319,7 +321,15 @@ class _WeeklyNoteCard extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: note.status == _WeekStatus.locked
                   ? null
-                  : () => Get.snackbar('Weekly note', 'Opening Week ${note.week} note.', snackPosition: SnackPosition.BOTTOM),
+                  : () => Get.to(
+                        () => WeeklyNoteReaderView(
+                          courseCode: courseCode,
+                          week: note.week,
+                          title: note.title,
+                          offlineReady: note.offlineReady,
+                          statusLabel: statusText,
+                        ),
+                      ),
               icon: const Icon(Icons.menu_book_outlined),
               label: const Text('Open note'),
             ),
