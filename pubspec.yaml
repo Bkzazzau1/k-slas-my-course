@@ -19,24 +19,26 @@ dependencies:
   file_picker: ^8.1.7
   video_player: ^2.9.2
 
-  # --- K-SLAS INTEGRITY SUITE (NEW) ---
+  # --- K-SLAS INTEGRITY SUITE ---
 
   # 1. OS-Level Security (Prevents screenshots and screen recording)
-  screen_protector: ^1.5.1 # Advanced screen privacy (mirrors/recording)
+  screen_protector: ^1.5.1
 
   # 2. Proximity & Network Detection (Detects nearby devices and network mismatches)
-  flutter_blue_plus: ^1.31.0 # Bluetooth scanning for hidden devices
-  network_info_plus: ^6.1.1 # Fetches Gateway/IP for network mismatch checks
+  flutter_blue_plus: ^1.31.0
+  network_info_plus: ^6.1.1
 
   # 3. Behavioral AI & Continuous Identity (Edge AI processing)
-  camera: ^0.11.0 # Access to camera for side-proctoring
+  camera: ^0.11.0
+  # Federated Windows implementation so desktop proctoring can open the webcam.
+  camera_windows: ^0.2.6+2
 
   # 4. Tamper Detection (Detects if phone is picked up or moved)
-  sensors_plus: ^6.1.1 # Gyroscope/Accelerometer monitoring
+  sensors_plus: ^6.1.1
 
   # 5. Audio Analysis (Whisper & Ultrasonic Handshake)
-  record: ^6.2.0 # Captures audio for whisper detection
-  fftea: ^1.5.0+1 # Fast Fourier Transform for ultrasonic handshake
+  record: ^6.2.0
+  fftea: ^1.5.0+1
   flutter_rust_bridge: 2.11.1
   livekit_client: ^2.6.4
   http: ^1.6.0
