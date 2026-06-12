@@ -25,6 +25,21 @@ class GradedSessionTemplate {
 class GradedSessionTemplateService {
   GradedSessionTemplateService._();
 
+  static const GradedSessionTemplate _assessmentDemoTemplate =
+      GradedSessionTemplate(
+        sections: [
+          ExamSectionType.objective,
+          ExamSectionType.fillBlank,
+          ExamSectionType.theory,
+        ],
+        // Five-question demo sample: 3 CBT/objective + 1 fill-blank + 1 theory.
+        objectiveQuestions: 3,
+        fillBlankQuestions: 1,
+        theoryQuestions: 1,
+        durationMinutes: 20,
+        deliveryMode: ExamDeliveryMode.remoteProctored,
+      );
+
   // Backend placeholder. Replace with API payload from lecturer/admin panel.
   static GradedSessionTemplate? templateFor({
     required String courseCode,
@@ -35,18 +50,7 @@ class GradedSessionTemplateService {
 
     if (code == 'CSC 305') {
       return isAssessment
-          ? const GradedSessionTemplate(
-              sections: [
-                ExamSectionType.objective,
-                ExamSectionType.fillBlank,
-                ExamSectionType.theory,
-              ],
-              objectiveQuestions: 10,
-              fillBlankQuestions: 4,
-              theoryQuestions: 1,
-              durationMinutes: 35,
-              deliveryMode: ExamDeliveryMode.remoteProctored,
-            )
+          ? _assessmentDemoTemplate
           : const GradedSessionTemplate(
               sections: [
                 ExamSectionType.objective,
@@ -63,18 +67,7 @@ class GradedSessionTemplateService {
 
     if (code == 'MTH 202') {
       return isAssessment
-          ? const GradedSessionTemplate(
-              sections: [
-                ExamSectionType.objective,
-                ExamSectionType.fillBlank,
-                ExamSectionType.theory,
-              ],
-              objectiveQuestions: 10,
-              fillBlankQuestions: 4,
-              theoryQuestions: 1,
-              durationMinutes: 35,
-              deliveryMode: ExamDeliveryMode.remoteProctored,
-            )
+          ? _assessmentDemoTemplate
           : const GradedSessionTemplate(
               sections: [
                 ExamSectionType.objective,
@@ -91,18 +84,7 @@ class GradedSessionTemplateService {
 
     if (code == 'GST 201') {
       return isAssessment
-          ? const GradedSessionTemplate(
-              sections: [
-                ExamSectionType.objective,
-                ExamSectionType.fillBlank,
-                ExamSectionType.theory,
-              ],
-              objectiveQuestions: 10,
-              fillBlankQuestions: 4,
-              theoryQuestions: 1,
-              durationMinutes: 35,
-              deliveryMode: ExamDeliveryMode.remoteProctored,
-            )
+          ? _assessmentDemoTemplate
           : const GradedSessionTemplate(
               sections: [
                 ExamSectionType.objective,
@@ -117,20 +99,8 @@ class GradedSessionTemplateService {
             );
     }
 
-    // Default lecturer template for any new course.
     return isAssessment
-        ? const GradedSessionTemplate(
-            sections: [
-              ExamSectionType.objective,
-              ExamSectionType.fillBlank,
-              ExamSectionType.theory,
-            ],
-            objectiveQuestions: 10,
-            fillBlankQuestions: 4,
-            theoryQuestions: 1,
-            durationMinutes: 35,
-            deliveryMode: ExamDeliveryMode.remoteProctored,
-          )
+        ? _assessmentDemoTemplate
         : const GradedSessionTemplate(
             sections: [
               ExamSectionType.objective,
