@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/exam_models.dart';
+import '../../../data/services/draft_sync_service.dart';
 import '../../../data/services/submission_history_service.dart';
 
 class ResultsView extends StatefulWidget {
@@ -14,22 +15,30 @@ class ResultsView extends StatefulWidget {
 
 class _ResultsViewState extends State<ResultsView> {
   late List<SubmissionHistoryRecord> records;
+  late List<OfflineDraftRecord> drafts;
+  late List<PendingSyncRecord> pendingSync;
 
   @override
   void initState() {
     super.initState();
+    load();
+  }
+
+  void load() {
     records = SubmissionHistoryService.load();
+    drafts = DraftSyncService.loadDrafts();
+    pendingSync = DraftSyncService.loadPendingSync();
   }
 
   Future<void> refresh() async {
-    setState(() => records = SubmissionHistoryService.load());
+    setState(load);
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final graded = records.where((e) => e.gradingType == GradingType.graded).length;
     final proctored = records.where((e) => e.proctored).length;
+    final hasAny = records.isNotEmpty || drafts.isNotEmpty || pendingSync.isNotEmpty;
 
     return Scaffold(
       body: LuxuryScaffold(
@@ -38,23 +47,52 @@ class _ResultsViewState extends State<ResultsView> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: _Header(total: records.length, graded: graded, proctored: proctored),
+              child: _Header(
+                total: records.length,
+                graded: graded,
+                proctored: proctored,
+                drafts: drafts.length,
+                pending: pendingSync.length,
+              ),
             ),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: refresh,
-                child: records.isEmpty
+                child: !hasAny
                     ? ListView(
                         padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
                         children: [
                           _EmptyCard(onStart: () => Get.toNamed('/cbt/setup', arguments: {'courseCode': 'CSC 305'})),
                         ],
                       )
-                    : ListView.separated(
+                    : ListView(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                        itemCount: records.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) => _SubmissionCard(record: records[index]),
+                        children: [
+                          if (drafts.isNotEmpty) ...[
+                            _SectionLabel(title: 'Offline drafts', subtitle: 'Saved locally. Continue when ready.'),
+                            const SizedBox(height: 8),
+                            ...drafts.map((draft) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _DraftCard(draft: draft),
+                                )),
+                          ],
+                          if (pendingSync.isNotEmpty) ...[
+                            _SectionLabel(title: 'Pending sync', subtitle: 'Waiting to upload when network is available.'),
+                            const SizedBox(height: 8),
+                            ...pendingSync.map((item) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _PendingSyncCard(item: item),
+                                )),
+                          ],
+                          if (records.isNotEmpty) ...[
+                            _SectionLabel(title: 'Submission receipts', subtitle: 'Completed submissions and receipt numbers.'),
+                            const SizedBox(height: 8),
+                            ...records.map((record) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _SubmissionCard(record: record),
+                                )),
+                          ],
+                        ],
                       ),
               ),
             ),
@@ -66,10 +104,18 @@ class _ResultsViewState extends State<ResultsView> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.total, required this.graded, required this.proctored});
+  const _Header({
+    required this.total,
+    required this.graded,
+    required this.proctored,
+    required this.drafts,
+    required this.pending,
+  });
   final int total;
   final int graded;
   final int proctored;
+  final int drafts;
+  final int pending;
 
   @override
   Widget build(BuildContext context) {
@@ -92,16 +138,16 @@ class _Header extends StatelessWidget {
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(
-                  'Submission History',
+                  'Submission & Offline Center',
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20),
                 ),
               ),
-              const Icon(Icons.receipt_long_rounded, color: Colors.white),
+              const Icon(Icons.cloud_done_rounded, color: Colors.white),
             ],
           ),
           const SizedBox(height: 12),
           Text(
-            'Your exam and assessment receipts are saved here for personal record.',
+            'Your receipts, saved drafts, and pending sync items are kept here.',
             style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
@@ -109,7 +155,9 @@ class _Header extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _HeroPill(label: '$total total'),
+              _HeroPill(label: '$total receipts'),
+              _HeroPill(label: '$drafts drafts'),
+              _HeroPill(label: '$pending pending sync'),
               _HeroPill(label: '$graded graded'),
               _HeroPill(label: '$proctored proctored'),
             ],
@@ -138,6 +186,25 @@ class _HeroPill extends StatelessWidget {
   }
 }
 
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.title, required this.subtitle});
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
+        const SizedBox(height: 2),
+        Text(subtitle, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.66), fontWeight: FontWeight.w600)),
+      ]),
+    );
+  }
+}
+
 class _EmptyCard extends StatelessWidget {
   const _EmptyCard({required this.onStart});
   final VoidCallback onStart;
@@ -149,12 +216,12 @@ class _EmptyCard extends StatelessWidget {
       context,
       child: Column(
         children: [
-          Icon(Icons.receipt_long_outlined, size: 46, color: cs.primary),
+          Icon(Icons.cloud_off_rounded, size: 46, color: cs.primary),
           const SizedBox(height: 12),
-          const Text('No submission receipt yet', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+          const Text('No local record yet', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
           const SizedBox(height: 8),
           Text(
-            'After you submit an assessment or examination, the receipt will appear here automatically.',
+            'Drafts, pending sync items, and submission receipts will appear here automatically.',
             textAlign: TextAlign.center,
             style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600),
           ),
@@ -162,6 +229,67 @@ class _EmptyCard extends StatelessWidget {
           FilledButton.icon(onPressed: onStart, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Start assessment')),
         ],
       ),
+    );
+  }
+}
+
+class _DraftCard extends StatelessWidget {
+  const _DraftCard({required this.draft});
+  final OfflineDraftRecord draft;
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = draft.secondsLeft <= 0
+        ? 'Untimed / expired'
+        : '${(draft.secondsLeft ~/ 60).toString().padLeft(2, '0')}:${(draft.secondsLeft % 60).toString().padLeft(2, '0')} left';
+    return _glass(
+      context,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.save_rounded, color: Colors.orange),
+          const SizedBox(width: 10),
+          Expanded(child: Text(draft.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
+          _StatusChip(label: 'Draft', color: Colors.orange.shade700),
+        ]),
+        const SizedBox(height: 10),
+        _InfoRow(label: 'Course', value: draft.courseCode),
+        _InfoRow(label: 'Answered', value: '${draft.answered}/${draft.total}'),
+        _InfoRow(label: 'Saved', value: _formatDate(draft.savedAt)),
+        _InfoRow(label: 'Time', value: remaining),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: () => Get.toNamed('/cbt/setup', arguments: {'courseCode': draft.courseCode}),
+            icon: const Icon(Icons.play_arrow_rounded),
+            label: const Text('Continue assessment'),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
+class _PendingSyncCard extends StatelessWidget {
+  const _PendingSyncCard({required this.item});
+  final PendingSyncRecord item;
+
+  @override
+  Widget build(BuildContext context) {
+    return _glass(
+      context,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.sync_problem_rounded, color: Colors.orange),
+          const SizedBox(width: 10),
+          Expanded(child: Text(item.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))),
+          _StatusChip(label: 'Pending', color: Colors.orange.shade700),
+        ]),
+        const SizedBox(height: 10),
+        _InfoRow(label: 'Course', value: item.courseCode),
+        _InfoRow(label: 'Status', value: item.status),
+        _InfoRow(label: 'Created', value: _formatDate(item.createdAt)),
+      ]),
     );
   }
 }
@@ -218,15 +346,6 @@ class _SubmissionCard extends StatelessWidget {
       ),
     );
   }
-
-  static String _formatDate(DateTime value) {
-    final y = value.year.toString().padLeft(4, '0');
-    final m = value.month.toString().padLeft(2, '0');
-    final d = value.day.toString().padLeft(2, '0');
-    final hh = value.hour.toString().padLeft(2, '0');
-    final mm = value.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $hh:$mm';
-  }
 }
 
 class _InfoRow extends StatelessWidget {
@@ -262,6 +381,15 @@ class _StatusChip extends StatelessWidget {
       child: Text(label, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11)),
     );
   }
+}
+
+String _formatDate(DateTime value) {
+  final y = value.year.toString().padLeft(4, '0');
+  final m = value.month.toString().padLeft(2, '0');
+  final d = value.day.toString().padLeft(2, '0');
+  final hh = value.hour.toString().padLeft(2, '0');
+  final mm = value.minute.toString().padLeft(2, '0');
+  return '$y-$m-$d $hh:$mm';
 }
 
 Widget _glass(BuildContext context, {required Widget child}) {
