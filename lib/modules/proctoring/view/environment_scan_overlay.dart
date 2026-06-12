@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../core/rust/rust_brain_service.dart';
@@ -24,13 +25,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
   bool _cameraPermissionFailed = false;
   bool _cameraUnavailable = false;
   bool _initializingCamera = false;
-  bool _desktopCameraFallback = false;
+  bool _imageStreamAvailable = false;
 
   String _alertMessage = 'Slowly rotate your device 360°';
+  String? _cameraErrorDetails;
   List<String> _detectedLabels = const [];
-
-  bool get _isDesktopRuntime =>
-      GetPlatform.isWindows || GetPlatform.isMacOS || GetPlatform.isLinux;
 
   @override
   void initState() {
@@ -44,7 +43,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
-      _cameraController?.stopImageStream();
+      _stopImageStreamIfNeeded();
       return;
     }
     if (state == AppLifecycleState.resumed) {
@@ -56,49 +55,55 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
     if (_initializingCamera) return;
     _initializingCamera = true;
 
-    setState(() {
-      _cameraPermissionFailed = false;
-      _cameraUnavailable = false;
-      _desktopCameraFallback = false;
-      _isCameraReady = false;
-      _scanDetectorReady = false;
-      _alertMessage = 'Preparing camera permission request...';
-    });
+    if (mounted) {
+      setState(() {
+        _cameraPermissionFailed = false;
+        _cameraUnavailable = false;
+        _isCameraReady = false;
+        _scanDetectorReady = false;
+        _imageStreamAvailable = false;
+        _cameraErrorDetails = null;
+        _detectedLabels = const [];
+        _alertMessage = 'Opening camera for live verification...';
+      });
+    }
 
-    try {
-      await _cameraController?.stopImageStream();
-    } catch (_) {}
-    await _cameraController?.dispose();
-    _cameraController = null;
+    await _disposeCameraController();
 
     try {
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        if (_isDesktopRuntime) {
-          await _activateDesktopCameraFallback();
-          return;
-        }
         if (!mounted) return;
         setState(() {
           _cameraUnavailable = true;
           _alertMessage = 'No camera was found on this device.';
+          _cameraErrorDetails =
+              'Connect a webcam and confirm Windows privacy settings allow desktop apps to use the camera.';
         });
         return;
       }
 
+      final front = cameras.where(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+      );
       final back = cameras.where(
         (camera) => camera.lensDirection == CameraLensDirection.back,
       );
-      final selected = back.isNotEmpty ? back.first : cameras.first;
+      final selected = front.isNotEmpty
+          ? front.first
+          : (back.isNotEmpty ? back.first : cameras.first);
 
       final controller = CameraController(
         selected,
         ResolutionPreset.medium,
         enableAudio: false,
+        imageFormatGroup: ImageFormatGroup.bgra8888,
       );
       _cameraController = controller;
       await controller.initialize();
 
+      // The live preview is the hard requirement. Frame streaming is a bonus
+      // used for local AI checks where the platform camera plugin supports it.
       await _proctoring.registerEnvironmentFrameAnalysis(
         objectLabels: const <String>[],
         lightingScore: 1.0,
@@ -107,7 +112,9 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
 
       try {
         await RustBrainService.instance.ensureVisionModelLoaded();
-      } catch (_) {}
+      } catch (_) {
+        // The scan can still continue with preview + rotation if local AI warm-up fails.
+      }
 
       await _startImageStreamIfReady();
 
@@ -115,40 +122,59 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
       setState(() {
         _scanDetectorReady = true;
         _isCameraReady = true;
-        _alertMessage = 'Camera ready. Rotate slowly to complete verification.';
+        _alertMessage = _imageStreamAvailable
+            ? 'Camera ready. Rotate slowly while the AI checks the room.'
+            : 'Camera preview ready. Rotate slowly to complete verification.';
       });
-    } catch (_) {
-      if (_isDesktopRuntime) {
-        await _activateDesktopCameraFallback();
-        return;
-      }
-      if (!mounted) return;
-      setState(() {
-        _cameraPermissionFailed = true;
-        _alertMessage =
-            'Camera permission is required. Allow access to continue scan.';
-      });
+    } on CameraException catch (e) {
+      _showCameraFailure(
+        message: 'Camera permission is required. Allow access to continue scan.',
+        details: '${e.code}: ${e.description ?? 'Camera access failed.'}',
+      );
+    } on MissingPluginException catch (_) {
+      _showCameraFailure(
+        message: 'Desktop camera module is not available.',
+        details:
+            'Run flutter clean, flutter pub get, then rebuild the Windows app. The project now includes the Windows camera implementation.',
+      );
+    } catch (e) {
+      _showCameraFailure(
+        message: 'Camera could not be opened for verification.',
+        details: e.toString(),
+      );
     } finally {
       _initializingCamera = false;
     }
   }
 
-  Future<void> _activateDesktopCameraFallback() async {
-    await _proctoring.registerEnvironmentFrameAnalysis(
-      objectLabels: const <String>[],
-      lightingScore: 1.0,
-      rotationCovered: _proctoring.scanProgress.value >= 1.0,
-    );
+  void _showCameraFailure({required String message, required String details}) {
     if (!mounted) return;
     setState(() {
-      _desktopCameraFallback = true;
-      _cameraPermissionFailed = false;
+      _cameraPermissionFailed = true;
       _cameraUnavailable = false;
-      _scanDetectorReady = true;
       _isCameraReady = false;
-      _alertMessage =
-          'Desktop verification fallback is active. Complete the rotation, then continue.';
+      _scanDetectorReady = false;
+      _alertMessage = message;
+      _cameraErrorDetails = details;
     });
+  }
+
+  Future<void> _stopImageStreamIfNeeded() async {
+    final controller = _cameraController;
+    if (controller == null) return;
+    if (!controller.value.isInitialized) return;
+    if (!controller.value.isStreamingImages) return;
+    try {
+      await controller.stopImageStream();
+    } catch (_) {}
+  }
+
+  Future<void> _disposeCameraController() async {
+    await _stopImageStreamIfNeeded();
+    try {
+      await _cameraController?.dispose();
+    } catch (_) {}
+    _cameraController = null;
   }
 
   Future<void> _startImageStreamIfReady() async {
@@ -159,8 +185,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
 
     try {
       await controller.startImageStream(_processFrame);
+      _imageStreamAvailable = true;
     } catch (_) {
-      // Some desktop/web camera implementations allow preview but not image streaming.
+      _imageStreamAvailable = false;
+      // Windows/web camera preview may work even when image stream callbacks are
+      // unavailable. The preview + rotation scan still proves live camera access.
     }
   }
 
@@ -213,16 +242,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
   }
 
   Future<void> _returnToDashboard() async {
-    try {
-      await _cameraController?.stopImageStream();
-    } catch (_) {}
-    try {
-      await _cameraController?.dispose();
-    } catch (_) {}
-    _cameraController = null;
-
-    // Navigate first. Calling stopSession first can close this dialog and leave
-    // the Windows desktop shell with an empty route stack.
+    await _disposeCameraController();
     Get.offAllNamed('/main');
     await Future<void>.delayed(const Duration(milliseconds: 80));
     await _proctoring.stopSession(silent: true);
@@ -235,8 +255,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _cameraController?.stopImageStream();
-    _cameraController?.dispose();
+    _disposeCameraController();
     super.dispose();
   }
 
@@ -310,10 +329,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    if (_desktopCameraFallback) ...[
+                    if (_cameraErrorDetails != null) ...[
                       const SizedBox(height: 8),
                       Text(
-                        'The Windows desktop build could not open the camera plugin, so this demo uses a reduced-assurance desktop fallback. The production desktop app should use the native Windows camera bridge.',
+                        _cameraErrorDetails!,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.82),
                           fontWeight: FontWeight.w600,
@@ -321,25 +340,13 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                       ),
                     ],
                     if (_cameraPermissionFailed || _cameraUnavailable) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _cameraUnavailable
-                            ? 'Connect a camera, then return to verification.'
-                            : 'Use the browser or system permission popup to allow camera access. If you already denied it, enable camera permission from the address bar or app settings.',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.82),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
                         children: [
                           FilledButton.icon(
-                            onPressed: _cameraUnavailable
-                                ? null
-                                : _retryCameraPermission,
+                            onPressed: _retryCameraPermission,
                             icon: const Icon(Icons.camera_alt_rounded),
                             label: const Text('Try camera again'),
                           ),
@@ -371,6 +378,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                       final canComplete =
                           !_cameraPermissionFailed &&
                           !_cameraUnavailable &&
+                          _isCameraReady &&
                           _proctoring.scanProgress.value >= 1.0 &&
                           _proctoring.scanRotationConfirmed.value &&
                           _proctoring.scanLightingScore.value >=
@@ -423,34 +431,6 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
 
   Widget _buildCameraLayer() {
     final controller = _cameraController;
-    if (_desktopCameraFallback) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(
-                Icons.desktop_windows_rounded,
-                color: Colors.white,
-                size: 58,
-              ),
-              SizedBox(height: 14),
-              Text(
-                'Desktop verification fallback',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 20,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     if (_cameraPermissionFailed || _cameraUnavailable) {
       return Center(
         child: Padding(
@@ -488,7 +468,15 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
         child: CircularProgressIndicator(color: Colors.white),
       );
     }
-    return CameraPreview(controller);
+
+    return Center(
+      child: AspectRatio(
+        aspectRatio: controller.value.aspectRatio == 0
+            ? 16 / 9
+            : controller.value.aspectRatio,
+        child: CameraPreview(controller),
+      ),
+    );
   }
 }
 
