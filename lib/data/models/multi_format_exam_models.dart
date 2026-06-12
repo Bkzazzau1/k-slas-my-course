@@ -74,7 +74,7 @@ class ExamSecurityPolicy {
     this.demoMode = true,
     this.shuffleQuestions = true,
     this.lockCopyPaste = true,
-    this.calculatorEnabled = false,
+    this.calculatorEnabled = true,
     this.requireProctoring = true,
     this.allowVerificationOverride = true,
   });
