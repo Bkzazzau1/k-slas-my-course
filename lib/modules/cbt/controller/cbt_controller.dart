@@ -8,6 +8,7 @@ import '../../../data/models/cbt_models.dart';
 import '../../../data/models/exam_models.dart';
 import '../../../data/services/cbt_attempt_storage.dart';
 import '../../../data/services/cbt_question_service.dart';
+import '../../../data/services/draft_sync_service.dart';
 import '../../../data/services/graded_session_template_service.dart';
 import '../../../data/services/storage_service.dart';
 import '../../revision/controller/revision_controller.dart';
@@ -221,6 +222,17 @@ class CBTController extends GetxController {
       'savedAt': now.toIso8601String(),
     });
     lastAutoSavedAt.value = now;
+    unawaited(DraftSyncService.upsertDraft(OfflineDraftRecord(
+      key: _draftKey,
+      courseCode: courseCode,
+      title: 'Objective section draft',
+      sessionType: sessionType,
+      gradingType: gradingType,
+      answered: answers.length,
+      total: questions.length,
+      secondsLeft: secondsLeft.value,
+      savedAt: now,
+    )));
   }
 
   void _restoreDraftIfAvailable() {
@@ -335,6 +347,7 @@ class CBTController extends GetxController {
 
       await CBTAttemptStorage.saveAttempt(courseCode, attempt);
       await StorageService.box.remove(_draftKey);
+      await DraftSyncService.removeDraft(_draftKey);
 
       try {
         final rev = Get.find<RevisionPlanController>();
