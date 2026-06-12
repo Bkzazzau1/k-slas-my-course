@@ -13,8 +13,10 @@ import '../view/weekly_note_reader_view.dart';
 import '../../video_lectures/controller/video_lectures_controller.dart';
 
 class StudyTab extends StatelessWidget {
-  const StudyTab({super.key, required this.course});
+  const StudyTab({super.key, required this.course, this.chromeCollapsed = false});
+
   final CourseModel course;
+  final bool chromeCollapsed;
 
   @override
   Widget build(BuildContext context) {
@@ -28,10 +30,7 @@ class StudyTab extends StatelessWidget {
 
     return Obx(() {
       final allLectures = controller.lecturesForCourse(course.code);
-      final lectures = controller.lecturesForCourse(
-        course.code,
-        category: category,
-      );
+      final lectures = controller.lecturesForCourse(course.code, category: category);
 
       if (allLectures.isEmpty && !controller.isLoading.value) {
         controller.loadLectures(courseCode: course.code);
@@ -47,19 +46,21 @@ class StudyTab extends StatelessWidget {
           final totalItems = materials.length + lectures.length + weeklyNotes.length;
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+            padding: EdgeInsets.fromLTRB(16, chromeCollapsed ? 4 : 14, 16, 18),
             children: [
-              _StudyOverviewCard(
-                course: course,
-                materialCount: materials.length,
-                lectureCount: lectures.length,
-                watchedCount: watched,
-                downloadableCount: downloadable + weeklyNotes.length,
-                weeklyNoteCount: weeklyNotes.length,
-              ),
-              const SizedBox(height: 12),
-              _StudyActionRow(course: course),
-              const SizedBox(height: 16),
+              if (!chromeCollapsed) ...[
+                _StudyOverviewCard(
+                  course: course,
+                  materialCount: materials.length,
+                  lectureCount: lectures.length,
+                  watchedCount: watched,
+                  downloadableCount: downloadable + weeklyNotes.length,
+                  weeklyNoteCount: weeklyNotes.length,
+                ),
+                const SizedBox(height: 12),
+                _StudyActionRow(course: course),
+                const SizedBox(height: 16),
+              ],
               if (controller.isLoading.value || loadingMaterials)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 28),
@@ -81,7 +82,7 @@ class StudyTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 if (materials.isEmpty)
-                  _MiniEmpty(message: 'No additional document or link material has been published yet.')
+                  const _MiniEmpty(message: 'No additional document or link material has been published yet.')
                 else
                   for (final material in materials) _MaterialStudyTile(material: material),
                 const SizedBox(height: 10),
@@ -91,7 +92,7 @@ class StudyTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 if (lectures.isEmpty)
-                  _MiniEmpty(message: 'No video lecture is available for your student category yet.')
+                  const _MiniEmpty(message: 'No video lecture is available for your student category yet.')
                 else
                   for (final lecture in lectures)
                     _LectureStudyTile(
@@ -130,20 +131,20 @@ class StudyTab extends StatelessWidget {
       'Final revision checklist',
       'Exam focus and summary notes',
     ];
-
     if (normalized.contains('CSC')) {
-      topics[0] = 'Introduction to algorithms and data structures';
-      topics[1] = 'Arrays, linked lists and memory representation';
-      topics[2] = 'Stacks, queues and recursion notes';
-      topics[3] = 'Trees, binary search trees and traversal';
-      topics[4] = 'Graphs, BFS, DFS and shortest paths';
-      topics[5] = 'Sorting and searching revision guide';
-      topics[6] = 'Hashing, maps and collision handling';
-      topics[7] = 'Complexity analysis and Big-O practice';
-      topics[8] = 'CBT practice questions with explanations';
-      topics[9] = 'Past-question solution notes';
-      topics[10] = 'Final revision checklist';
-      topics[11] = 'Exam focus and common mistakes';
+      topics
+        ..[0] = 'Introduction to algorithms and data structures'
+        ..[1] = 'Arrays, linked lists and memory representation'
+        ..[2] = 'Stacks, queues and recursion notes'
+        ..[3] = 'Trees, binary search trees and traversal'
+        ..[4] = 'Graphs, BFS, DFS and shortest paths'
+        ..[5] = 'Sorting and searching revision guide'
+        ..[6] = 'Hashing, maps and collision handling'
+        ..[7] = 'Complexity analysis and Big-O practice'
+        ..[8] = 'CBT practice questions with explanations'
+        ..[9] = 'Past-question solution notes'
+        ..[10] = 'Final revision checklist'
+        ..[11] = 'Exam focus and common mistakes';
     }
 
     return List.generate(
@@ -184,40 +185,21 @@ class _StudyOverviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-            color: cs.primary.withValues(alpha: 0.15),
-          ),
-        ],
+        boxShadow: [BoxShadow(blurRadius: 24, offset: const Offset(0, 14), color: cs.primary.withValues(alpha: 0.15))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          CircleAvatar(
-            radius: 25,
-            backgroundColor: Colors.white.withValues(alpha: 0.18),
-            child: const Icon(Icons.menu_book_outlined, color: Colors.white),
-          ),
+          CircleAvatar(radius: 25, backgroundColor: Colors.white.withValues(alpha: 0.18), child: const Icon(Icons.menu_book_outlined, color: Colors.white)),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(course.code, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
-              const SizedBox(height: 3),
-              Text('Study workspace', style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700)),
-            ]),
-          ),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(course.code, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+            const SizedBox(height: 3),
+            Text('Study workspace', style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700)),
+          ])),
           Text('${course.progress}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26)),
         ]),
         const SizedBox(height: 14),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 10,
-            backgroundColor: Colors.white.withValues(alpha: 0.20),
-          ),
-        ),
+        ClipRRect(borderRadius: BorderRadius.circular(999), child: LinearProgressIndicator(value: progress, minHeight: 10, backgroundColor: Colors.white.withValues(alpha: 0.20))),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
           _HeroPill(label: '$weeklyNoteCount weekly notes'),
@@ -239,11 +221,7 @@ class _HeroPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.17),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-      ),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.17), borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.white.withValues(alpha: 0.22))),
       child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
     );
   }
@@ -254,60 +232,46 @@ class _WeeklyNoteCard extends StatelessWidget {
   final _WeeklyNote note;
   final String courseCode;
 
+  Color _statusColor(BuildContext context) {
+    switch (note.status) {
+      case _WeekStatus.available:
+        return Colors.green.shade700;
+      case _WeekStatus.current:
+        return Colors.orange.shade700;
+      case _WeekStatus.locked:
+        return Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.48);
+    }
+  }
+
+  String _statusText() {
+    switch (note.status) {
+      case _WeekStatus.available:
+        return 'Available';
+      case _WeekStatus.current:
+        return 'Current week';
+      case _WeekStatus.locked:
+        return 'Locked';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final color = switch (note.status) {
-      _WeekStatus.available => Colors.green.shade700,
-      _WeekStatus.current => Colors.orange.shade700,
-      _WeekStatus.locked => cs.onSurface.withValues(alpha: 0.48),
-    };
-    final statusText = switch (note.status) {
-      _WeekStatus.available => 'Available',
-      _WeekStatus.current => 'Current week',
-      _WeekStatus.locked => 'Locked',
-    };
-
+    final color = _statusColor(context);
+    final statusText = _statusText();
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: 0.14)),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: cs.shadow.withValues(alpha: 0.035),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: color.withValues(alpha: 0.14))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 46,
-            height: 46,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text('W${note.week}', style: TextStyle(color: color, fontWeight: FontWeight.w900)),
-          ),
+          Container(width: 46, height: 46, alignment: Alignment.center, decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(16)), child: Text('W${note.week}', style: TextStyle(color: color, fontWeight: FontWeight.w900))),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(note.title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
-              const SizedBox(height: 5),
-              Text(
-                'Weekly lecturer note with key points, examples, and revision focus.',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30),
-              ),
-            ]),
-          ),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(note.title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
+            const SizedBox(height: 5),
+            Text('Weekly lecturer note with key points, examples, and revision focus.', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30)),
+          ])),
         ]),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
@@ -321,15 +285,7 @@ class _WeeklyNoteCard extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: note.status == _WeekStatus.locked
                   ? null
-                  : () => Get.to(
-                        () => WeeklyNoteReaderView(
-                          courseCode: courseCode,
-                          week: note.week,
-                          title: note.title,
-                          offlineReady: note.offlineReady,
-                          statusLabel: statusText,
-                        ),
-                      ),
+                  : () => Get.to(() => WeeklyNoteReaderView(courseCode: courseCode, week: note.week, title: note.title, offlineReady: note.offlineReady, statusLabel: statusText)),
               icon: const Icon(Icons.menu_book_outlined),
               label: const Text('Open note'),
             ),
@@ -337,9 +293,7 @@ class _WeeklyNoteCard extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: OutlinedButton.icon(
-              onPressed: note.offlineReady
-                  ? () => Get.snackbar('Offline saved', 'Week ${note.week} note is ready offline.', snackPosition: SnackPosition.BOTTOM)
-                  : null,
+              onPressed: note.offlineReady ? () => Get.snackbar('Offline saved', 'Week ${note.week} note is ready offline.', snackPosition: SnackPosition.BOTTOM) : null,
               icon: const Icon(Icons.download_rounded),
               label: const Text('Save offline'),
             ),
@@ -357,29 +311,11 @@ class _StudyActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(children: [
-      Expanded(
-        child: _ActionButton(
-          icon: Icons.fact_check_outlined,
-          label: 'Assessment',
-          onTap: () => Get.toNamed(Routes.cbtSetup, arguments: {'courseCode': course.code}),
-        ),
-      ),
+      Expanded(child: _ActionButton(icon: Icons.fact_check_outlined, label: 'Assessment', onTap: () => Get.toNamed(Routes.cbtSetup, arguments: {'courseCode': course.code}))),
       const SizedBox(width: 8),
-      Expanded(
-        child: _ActionButton(
-          icon: Icons.live_tv_outlined,
-          label: 'Live class',
-          onTap: () => Get.toNamed(Routes.liveSessions),
-        ),
-      ),
+      Expanded(child: _ActionButton(icon: Icons.live_tv_outlined, label: 'Live class', onTap: () => Get.toNamed(Routes.liveSessions))),
       const SizedBox(width: 8),
-      Expanded(
-        child: _ActionButton(
-          icon: Icons.receipt_long_outlined,
-          label: 'Receipts',
-          onTap: () => Get.toNamed(Routes.results),
-        ),
-      ),
+      Expanded(child: _ActionButton(icon: Icons.receipt_long_outlined, label: 'Receipts', onTap: () => Get.toNamed(Routes.results))),
     ]);
   }
 }
@@ -398,11 +334,7 @@ class _ActionButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        decoration: BoxDecoration(
-          color: cs.primary.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
-        ),
+        decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(18), border: Border.all(color: cs.primary.withValues(alpha: 0.12))),
         child: Column(children: [
           Icon(icon, color: cs.primary),
           const SizedBox(height: 6),
@@ -415,159 +347,100 @@ class _ActionButton extends StatelessWidget {
 
 class _MaterialStudyTile extends StatelessWidget {
   const _MaterialStudyTile({required this.material});
-
   final CourseMaterialModel material;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final muted = cs.onSurface.withValues(alpha: 0.70);
     final type = material.materialType.toLowerCase();
     final isLink = type == 'link';
     final isPdf = type.contains('pdf') || type.contains('document');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: cs.shadow.withValues(alpha: 0.035),
-          ),
-        ],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(isLink ? Icons.link_rounded : isPdf ? Icons.picture_as_pdf_outlined : Icons.description_outlined, color: cs.primary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(material.title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
-              const SizedBox(height: 5),
-              Text(material.description, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontWeight: FontWeight.w600, height: 1.30)),
-            ]),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _Badge(text: material.materialType.toUpperCase(), color: cs.secondary),
-          _Badge(text: material.allowDownload ? 'Download allowed' : 'View only', color: cs.primary),
-          if (material.allowDownload) _Badge(text: 'Offline access', color: Colors.green.shade700),
-        ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => Get.snackbar('Material', 'Opening ${material.title}', snackPosition: SnackPosition.BOTTOM),
-              icon: Icon(isLink ? Icons.open_in_new_rounded : Icons.visibility_outlined),
-              label: const Text('Open'),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: material.allowDownload
-                  ? () => Get.snackbar('Offline saved', '${material.title} is ready for offline reading.', snackPosition: SnackPosition.BOTTOM)
-                  : null,
-              icon: const Icon(Icons.download_rounded),
-              label: const Text('Save offline'),
-            ),
-          ),
-        ]),
-      ]),
+    return _SimpleStudyTile(
+      icon: isLink ? Icons.link_rounded : isPdf ? Icons.picture_as_pdf_outlined : Icons.description_outlined,
+      title: material.title,
+      subtitle: material.description,
+      badges: [material.materialType.toUpperCase(), material.allowDownload ? 'Download allowed' : 'View only'],
+      primaryLabel: 'Open',
+      primaryIcon: isLink ? Icons.open_in_new_rounded : Icons.visibility_outlined,
+      onPrimary: () => Get.snackbar('Material', 'Opening ${material.title}', snackPosition: SnackPosition.BOTTOM),
+      secondaryLabel: 'Save offline',
+      secondaryIcon: Icons.download_rounded,
+      onSecondary: material.allowDownload ? () => Get.snackbar('Offline saved', '${material.title} is ready for offline reading.', snackPosition: SnackPosition.BOTTOM) : null,
     );
   }
 }
 
 class _LectureStudyTile extends StatelessWidget {
   const _LectureStudyTile({required this.lecture, required this.watched});
-
   final VideoLectureModel lecture;
   final bool watched;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final muted = cs.onSurface.withValues(alpha: 0.70);
-    final progress = watched ? 1.0 : 0.0;
-    final color = watched ? Colors.green.shade700 : cs.primary;
+    return _SimpleStudyTile(
+      icon: watched ? Icons.check_circle_outline_rounded : Icons.play_circle_outline_rounded,
+      title: lecture.title,
+      subtitle: '${watched ? 'Completed' : 'Pending'} • ${lecture.durationMinutes} min\n${lecture.subtitle}',
+      badges: [watched ? 'Watched' : 'Pending', '${lecture.durationMinutes} min'],
+      primaryLabel: watched ? 'Replay' : 'Watch',
+      primaryIcon: watched ? Icons.replay_rounded : Icons.play_arrow_rounded,
+      onPrimary: () => Get.toNamed(Routes.liveSessions),
+      secondaryLabel: 'Offline',
+      secondaryIcon: Icons.download_rounded,
+      onSecondary: () => Get.snackbar('Offline video', 'Lecture download will sync when backend storage is connected.', snackPosition: SnackPosition.BOTTOM),
+    );
+  }
+}
 
+class _SimpleStudyTile extends StatelessWidget {
+  const _SimpleStudyTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.badges,
+    required this.primaryLabel,
+    required this.primaryIcon,
+    required this.onPrimary,
+    required this.secondaryLabel,
+    required this.secondaryIcon,
+    required this.onSecondary,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final List<String> badges;
+  final String primaryLabel;
+  final IconData primaryIcon;
+  final VoidCallback onPrimary;
+  final String secondaryLabel;
+  final IconData secondaryIcon;
+  final VoidCallback? onSecondary;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-            color: cs.shadow.withValues(alpha: 0.035),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: cs.onSurface.withValues(alpha: 0.06))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(watched ? Icons.check_circle_outline_rounded : Icons.play_circle_outline_rounded, color: color),
-          ),
+          Container(width: 46, height: 46, decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: cs.primary)),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(lecture.title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
-              const SizedBox(height: 5),
-              Text(watched ? 'Completed • ${lecture.durationMinutes} min' : 'Pending • ${lecture.durationMinutes} min', style: TextStyle(color: muted, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 7),
-              Text(lecture.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: muted, fontWeight: FontWeight.w600, height: 1.30)),
-            ]),
-          ),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
+            const SizedBox(height: 5),
+            Text(subtitle, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30)),
+          ])),
         ]),
         const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            value: progress,
-            minHeight: 9,
-            backgroundColor: cs.onSurface.withValues(alpha: 0.06),
-          ),
-        ),
+        Wrap(spacing: 8, runSpacing: 8, children: badges.map((text) => _Badge(text: text, color: cs.primary)).toList()),
         const SizedBox(height: 12),
         Row(children: [
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: () => Get.toNamed(Routes.liveSessions),
-              icon: Icon(watched ? Icons.replay_rounded : Icons.play_arrow_rounded),
-              label: Text(watched ? 'Replay' : 'Watch'),
-            ),
-          ),
+          Expanded(child: FilledButton.icon(onPressed: onPrimary, icon: Icon(primaryIcon), label: Text(primaryLabel))),
           const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => Get.snackbar('Offline video', 'Lecture download will sync when backend storage is connected.', snackPosition: SnackPosition.BOTTOM),
-              icon: const Icon(Icons.download_rounded),
-              label: const Text('Offline'),
-            ),
-          ),
+          Expanded(child: OutlinedButton.icon(onPressed: onSecondary, icon: Icon(secondaryIcon), label: Text(secondaryLabel))),
         ]),
       ]),
     );
@@ -576,7 +449,6 @@ class _LectureStudyTile extends StatelessWidget {
 
 class _EmptyStudyState extends StatelessWidget {
   const _EmptyStudyState({required this.courseCode});
-
   final String courseCode;
 
   @override
@@ -584,21 +456,13 @@ class _EmptyStudyState extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-      ),
+      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: cs.onSurface.withValues(alpha: 0.06))),
       child: Column(children: [
         Icon(Icons.menu_book_outlined, size: 42, color: cs.primary),
         const SizedBox(height: 12),
         Text('No study material yet', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 17)),
         const SizedBox(height: 7),
-        Text(
-          'No lecturer-published study material is available for $courseCode yet. Check again later or open live classes and assessments.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30),
-        ),
+        Text('No lecturer-published study material is available for $courseCode yet. Check again later or open live classes and assessments.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30)),
       ]),
     );
   }
@@ -614,11 +478,7 @@ class _MiniEmpty extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-      ),
+      decoration: BoxDecoration(color: cs.onSurface.withValues(alpha: 0.03), borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.onSurface.withValues(alpha: 0.06))),
       child: Text(message, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.68), fontWeight: FontWeight.w700)),
     );
   }
@@ -632,26 +492,11 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final muted = cs.onSurface.withValues(alpha: 0.70);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 16,
-            color: cs.onSurface,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          subtitle,
-          style: TextStyle(color: muted, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface)),
+      const SizedBox(height: 6),
+      Text(subtitle, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600)),
+    ]);
   }
 }
 
@@ -664,24 +509,14 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.14)),
-      ),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withValues(alpha: 0.14))),
       child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11)),
     );
   }
 }
 
 class _WeeklyNote {
-  const _WeeklyNote({
-    required this.week,
-    required this.title,
-    required this.status,
-    required this.offlineReady,
-  });
-
+  const _WeeklyNote({required this.week, required this.title, required this.status, required this.offlineReady});
   final int week;
   final String title;
   final _WeekStatus status;
