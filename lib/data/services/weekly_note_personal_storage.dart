@@ -8,6 +8,7 @@ class WeeklyNotePersonalRecord {
     required this.week,
     required this.noteText,
     required this.highlights,
+    required this.revisionMarked,
     required this.updatedAt,
   });
 
@@ -15,6 +16,7 @@ class WeeklyNotePersonalRecord {
   final int week;
   final String noteText;
   final List<String> highlights;
+  final bool revisionMarked;
   final DateTime updatedAt;
 
   Map<String, dynamic> toJson() => {
@@ -22,12 +24,14 @@ class WeeklyNotePersonalRecord {
         'week': week,
         'noteText': noteText,
         'highlights': highlights,
+        'revisionMarked': revisionMarked,
         'updatedAt': updatedAt.toIso8601String(),
       };
 
   WeeklyNotePersonalRecord copyWith({
     String? noteText,
     List<String>? highlights,
+    bool? revisionMarked,
     DateTime? updatedAt,
   }) {
     return WeeklyNotePersonalRecord(
@@ -35,6 +39,7 @@ class WeeklyNotePersonalRecord {
       week: week,
       noteText: noteText ?? this.noteText,
       highlights: highlights ?? this.highlights,
+      revisionMarked: revisionMarked ?? this.revisionMarked,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -45,6 +50,7 @@ class WeeklyNotePersonalRecord {
       week: _asInt(json['week']),
       noteText: json['noteText']?.toString() ?? '',
       highlights: (json['highlights'] as List? ?? const []).map((e) => e.toString()).toList(),
+      revisionMarked: json['revisionMarked'] == true,
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '') ?? DateTime.now(),
     );
   }
@@ -71,25 +77,24 @@ class WeeklyNotePersonalStorage {
   }) {
     final raw = _box.read(_key(courseCode, week));
     if (raw == null) {
-      return WeeklyNotePersonalRecord(
-        courseCode: courseCode.trim().toUpperCase(),
-        week: week,
-        noteText: '',
-        highlights: const [],
-        updatedAt: DateTime.now(),
-      );
+      return _empty(courseCode: courseCode, week: week);
     }
     try {
       return WeeklyNotePersonalRecord.fromJson(jsonDecode(raw as String) as Map<String, dynamic>);
     } catch (_) {
-      return WeeklyNotePersonalRecord(
-        courseCode: courseCode.trim().toUpperCase(),
-        week: week,
-        noteText: '',
-        highlights: const [],
-        updatedAt: DateTime.now(),
-      );
+      return _empty(courseCode: courseCode, week: week);
     }
+  }
+
+  static WeeklyNotePersonalRecord _empty({required String courseCode, required int week}) {
+    return WeeklyNotePersonalRecord(
+      courseCode: courseCode.trim().toUpperCase(),
+      week: week,
+      noteText: '',
+      highlights: const [],
+      revisionMarked: false,
+      updatedAt: DateTime.now(),
+    );
   }
 
   static Future<void> save(WeeklyNotePersonalRecord record) async {
@@ -103,6 +108,15 @@ class WeeklyNotePersonalStorage {
   }) async {
     final current = load(courseCode: courseCode, week: week);
     await save(current.copyWith(noteText: noteText, updatedAt: DateTime.now()));
+  }
+
+  static Future<void> setRevisionMarked({
+    required String courseCode,
+    required int week,
+    required bool marked,
+  }) async {
+    final current = load(courseCode: courseCode, week: week);
+    await save(current.copyWith(revisionMarked: marked, updatedAt: DateTime.now()));
   }
 
   static Future<void> addHighlight({
