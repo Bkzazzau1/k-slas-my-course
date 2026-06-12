@@ -9,7 +9,7 @@ class CBTQuestionModel {
     required this.options,
     required this.correctIndex,
     this.explanation,
-    this.sourceLabel, // e.g. "ABU CSC305 2019 Q4"
+    this.sourceLabel,
   });
 
   final String id;
@@ -26,21 +26,21 @@ class CBTAttemptModel {
   CBTAttemptModel({
     required this.id,
     required this.courseCode,
-    this.sessionType = "ASSESSMENT", // ASSESSMENT / EXAMINATION
-    this.gradingType = "UNGRADED", // GRADED / UNGRADED
-    required this.mode, // Timed, Untimed, CBT style
+    this.sessionType = 'ASSESSMENT',
+    this.gradingType = 'UNGRADED',
+    required this.mode,
     required this.totalQuestions,
     required this.correct,
     required this.startedAt,
     required this.endedAt,
     required this.topic,
     required this.durationMinutes,
-    this.topicStats, // topic -> {"correct": int, "wrong": int, "total": int, "scorePct": int}
+    this.topicStats,
     this.whiteboardEnabled = false,
     this.whiteboardRequired = false,
     this.whiteboardStrokeCount = 0,
     this.whiteboardPrompt,
-    this.deliveryMode = ExamDeliveryMode.remoteProctored,
+    this.deliveryMode = ExamDeliveryMode.centerBased,
   });
 
   final String id;
