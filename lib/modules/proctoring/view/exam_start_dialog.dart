@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -29,6 +31,8 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
   bool _permissionNoticeAccepted = false;
   String? _errorText;
 
+  bool get _isExam => widget.sessionLabel.toLowerCase().contains('exam');
+
   @override
   void initState() {
     super.initState();
@@ -42,19 +46,19 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
       builder: (context) {
         final cs = Theme.of(context).colorScheme;
         return AlertDialog(
-          title: const Text('Allow exam verification permissions'),
+          title: Text('Allow ${widget.sessionLabel.toLowerCase()} verification permissions'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'K-SLAS needs these permissions before the ${widget.sessionLabel.toLowerCase()} can start:',
+                'K-SLAS needs these checks before the ${widget.sessionLabel.toLowerCase()} can start:',
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
               const _PermissionLine(
                 icon: Icons.camera_alt_rounded,
-                label: 'Camera for face and environment scan',
+                label: 'Camera for live identity and environment scan',
               ),
               const _PermissionLine(
                 icon: Icons.mic_rounded,
@@ -62,7 +66,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
               ),
               const _PermissionLine(
                 icon: Icons.screen_lock_portrait_rounded,
-                label: 'Motion and screen-integrity monitoring',
+                label: 'Screen, motion, and app-focus monitoring',
               ),
               const _PermissionLine(
                 icon: Icons.devices_other_rounded,
@@ -97,10 +101,40 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
   }
 
   Future<void> _returnToDashboard() async {
+    if (mounted) {
+      Navigator.of(context, rootNavigator: true).pop(false);
+    }
+    Get.offAllNamed('/main');
+    await Future<void>.delayed(const Duration(milliseconds: 80));
     await _proctoring.stopSession(silent: true);
-    if (!mounted) return;
-    Navigator.of(context).pop(false);
-    Get.offAllNamed('/');
+  }
+
+  Future<bool> _runCameraEnvironmentScan() async {
+    await _proctoring.verifyNetworkIntegrity();
+
+    if (_proctoring.examStartupScanCompleted.value &&
+        !_proctoring.scanRequired.value) {
+      return true;
+    }
+
+    _proctoring.requestEnvironmentScan(
+      _isExam
+          ? 'Complete a live camera environment scan before this high-stakes exam can begin.'
+          : 'Complete a live camera environment scan before this graded assessment can begin.',
+    );
+
+    final timeout = DateTime.now().add(const Duration(minutes: 3));
+    while (mounted && DateTime.now().isBefore(timeout)) {
+      if (_proctoring.sessionTerminated.value) return false;
+      if (_proctoring.examStartupScanCompleted.value &&
+          !_proctoring.scanRequired.value &&
+          !_proctoring.scanInProgress.value) {
+        return true;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
+
+    return false;
   }
 
   Future<void> _runChecks() async {
@@ -140,14 +174,14 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
       _identity = _CheckStepState.running;
     });
 
-    final identityOk = await _proctoring.verifyIdentityAndEnvironment();
+    final identityOk = await _runCameraEnvironmentScan();
     if (!mounted) return;
     if (!identityOk) {
       setState(() {
         _identity = _CheckStepState.failed;
         _running = false;
         _errorText =
-            'Identity or environment verification failed. You can retry or return to the dashboard.';
+            'Camera/environment verification failed. Allow camera access, complete the scan, or return to the dashboard.';
       });
       return;
     }
@@ -204,7 +238,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
             ),
             const SizedBox(height: 12),
             _CheckRow(label: 'OS fortress anti-capture', state: _fortress),
-            _CheckRow(label: 'Camera identity and environment check', state: _identity),
+            _CheckRow(label: 'Live camera identity and room scan', state: _identity),
             _CheckRow(label: 'Microphone acoustic tether', state: _acoustic),
             if (!_permissionNoticeAccepted) ...[
               const SizedBox(height: 10),
