@@ -23,7 +23,7 @@ class _FillBlankViewState extends State<FillBlankView> {
       AlertDialog(
         title: const Text('Leave fill-blank section?'),
         content: const Text(
-          'This section has not been submitted. Leaving returns to the exam section list.',
+          'Your answers have not been submitted. You can stay, or return to the section list.',
         ),
         actions: [
           TextButton(
@@ -38,9 +38,39 @@ class _FillBlankViewState extends State<FillBlankView> {
       ),
     );
 
-    if (leave == true) {
-      Get.back(result: null);
-    }
+    if (leave == true) Get.back(result: null);
+  }
+
+  Future<void> _submitSection(FillBlankController controller) async {
+    final submit = await Get.dialog<bool>(
+      AlertDialog(
+        title: const Text('Submit fill-blank section?'),
+        content: const Text(
+          'This will end this section and return to the examination section list.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Review answers'),
+          ),
+          FilledButton(
+            onPressed: () => Get.back(result: true),
+            child: const Text('Submit section'),
+          ),
+        ],
+      ),
+    );
+
+    if (submit != true) return;
+    final r = controller.submit();
+    Get.back(
+      result: {
+        'section': 'FILL_BLANK',
+        'totalMarks': r.totalMarks,
+        'scoredMarks': r.scoredMarks,
+        'extra': {'details': r.details},
+      },
+    );
   }
 
   @override
@@ -50,7 +80,6 @@ class _FillBlankViewState extends State<FillBlankView> {
     final controller = Get.find<FillBlankController>();
     final pasteLocked = cfg.securityPolicy.lockCopyPaste;
 
-    // Load once (not every rebuild)
     if (!_loaded) {
       controller.load(
         SampleExamService.fillBlankQuestions(
@@ -76,29 +105,24 @@ class _FillBlankViewState extends State<FillBlankView> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                 child: _HeroHeader(
-                  title: "${cfg.courseCode} - Fill in the blank",
+                  title: '${cfg.courseCode} - Fill in the blank',
                   subtitle:
-                      "Marked strictly from lecturer keywords.\nIf it's not in your materials, it won't count.",
-                  onBack: () {
-                    _leaveSection();
-                  },
-                  rightPill: "${cfg.fillBlankQuestions} Qs",
+                      'Short-answer section. Type the exact concept or term that completes each statement.',
+                  onBack: _leaveSection,
+                  rightPill: '${cfg.fillBlankQuestions} Qs',
                 ),
               ),
-
               Expanded(
                 child: Obx(() {
                   final qs = controller.questions;
-
                   return ListView(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
                     children: [
                       _GlassCard(
-                        title: "Rules",
+                        title: 'Instructions',
                         icon: Icons.rule_outlined,
                         child: Text(
-                          "Use exact lecturer keywords. Short forms not taught in class may be rejected. "
-                          "If the keyword is missing in your notes, your mark won't count.",
+                          'Answer each item using a concise technical term or phrase. Review your responses before submitting this section.',
                           style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.80),
                             height: 1.25,
@@ -107,12 +131,12 @@ class _FillBlankViewState extends State<FillBlankView> {
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      ...qs.map((q) {
+                      ...qs.asMap().entries.map((entry) {
+                        final q = entry.value;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: _GlassCard(
-                            title: "Question",
+                            title: 'Question ${entry.key + 1}',
                             icon: Icons.edit_outlined,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,40 +145,28 @@ class _FillBlankViewState extends State<FillBlankView> {
                                   q.prompt,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w900,
-                                    height: 1.2,
+                                    height: 1.25,
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-
                                 TextField(
-                                  onChanged: (v) =>
-                                      controller.setAnswer(q.id, v),
+                                  onChanged: (v) => controller.setAnswer(q.id, v),
                                   enableInteractiveSelection: !pasteLocked,
                                   contextMenuBuilder: pasteLocked
                                       ? (context, editableTextState) =>
                                             const SizedBox.shrink()
                                       : null,
                                   decoration: InputDecoration(
-                                    hintText:
-                                        "Your answer (keyword from notes)",
+                                    hintText: 'Type your answer',
                                     filled: true,
-                                    fillColor: cs.onSurface.withValues(
-                                      alpha: 0.04,
-                                    ),
+                                    fillColor: cs.onSurface.withValues(alpha: 0.04),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(14),
-                                      borderSide: BorderSide(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.10,
-                                        ),
-                                      ),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(14),
                                       borderSide: BorderSide(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.10,
-                                        ),
+                                        color: cs.onSurface.withValues(alpha: 0.10),
                                       ),
                                     ),
                                     contentPadding: const EdgeInsets.symmetric(
@@ -163,50 +175,27 @@ class _FillBlankViewState extends State<FillBlankView> {
                                     ),
                                   ),
                                 ),
-
                                 const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.sticky_note_2_outlined,
-                                      size: 16,
-                                      color: cs.primary,
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
                                     ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        "Source: ${q.sourceRef}",
-                                        style: TextStyle(
-                                          color: cs.onSurface.withValues(
-                                            alpha: 0.70,
-                                          ),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
+                                    decoration: BoxDecoration(
+                                      color: cs.primary.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(999),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: cs.primary.withValues(
-                                          alpha: 0.12,
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        "${q.marks} mark",
-                                        style: TextStyle(
-                                          color: cs.primary,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 12,
-                                        ),
+                                    child: Text(
+                                      '${q.marks} mark${q.marks == 1 ? '' : 's'}',
+                                      style: TextStyle(
+                                        color: cs.primary,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 12,
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -217,8 +206,6 @@ class _FillBlankViewState extends State<FillBlankView> {
                   );
                 }),
               ),
-
-              // Sticky submit
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
                 child: ClipRRect(
@@ -229,36 +216,33 @@ class _FillBlankViewState extends State<FillBlankView> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: cs.onSurface.withValues(alpha: 0.03),
-                        border: Border.all(
-                          color: cs.onSurface.withValues(alpha: 0.06),
-                        ),
+                        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () {
-                            final r = controller.submit();
-                            Get.back(
-                              result: {
-                                "section": "FILL_BLANK",
-                                "totalMarks": r.totalMarks,
-                                "scoredMarks": r.scoredMarks,
-                                "extra": {"details": r.details},
-                              },
-                            );
-                          },
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _leaveSection,
+                              icon: const Icon(Icons.arrow_back_rounded),
+                              label: const Text('Section list'),
                             ),
                           ),
-                          child: const Text(
-                            "Submit Section",
-                            style: TextStyle(fontWeight: FontWeight.w900),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () => _submitSection(controller),
+                              icon: const Icon(Icons.check_circle_outline_rounded),
+                              label: const Text('Submit section'),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
                   ),
@@ -271,8 +255,6 @@ class _FillBlankViewState extends State<FillBlankView> {
     );
   }
 }
-
-/* -------------------------- Shared premium widgets -------------------------- */
 
 class _HeroHeader extends StatelessWidget {
   const _HeroHeader({
@@ -290,7 +272,6 @@ class _HeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -303,13 +284,6 @@ class _HeroHeader extends StatelessWidget {
             cs.secondary.withValues(alpha: 0.80),
           ],
         ),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-            color: cs.primary.withValues(alpha: 0.18),
-          ),
-        ],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,10 +299,7 @@ class _HeroHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
               ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
             ),
           ),
           const SizedBox(width: 12),
@@ -366,10 +337,7 @@ class _HeroHeader extends StatelessWidget {
             ),
             child: Text(
               rightPill,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-              ),
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
             ),
           ),
         ],
@@ -401,13 +369,6 @@ class _GlassCard extends StatelessWidget {
             color: cs.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-                color: cs.onSurface.withValues(alpha: 0.04),
-              ),
-            ],
           ),
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
           child: Column(
@@ -428,10 +389,7 @@ class _GlassCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurface,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
                     ),
                   ),
                 ],
