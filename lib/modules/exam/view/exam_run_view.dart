@@ -50,10 +50,12 @@ class _ExamRunViewState extends State<ExamRunView> {
         }
         _ownsProctoringSession = true;
         unawaited(
-          proctoring.startSession(
-            level: AssessmentIntegrityLevel.highStakesExam,
-            onSessionTerminated: _handleSessionTermination,
-          ).then((_) {
+          proctoring
+              .startSession(
+                level: AssessmentIntegrityLevel.highStakesExam,
+                onSessionTerminated: _handleSessionTermination,
+              )
+              .then((_) {
             if (proctoring.examStartupScanCompleted.value) {
               proctoring.armExamMonitoring();
             }
@@ -111,9 +113,7 @@ class _ExamRunViewState extends State<ExamRunView> {
           'mode': cfg.mode == ExamMode.practice ? 'Untimed' : 'Timed',
           'topic': cfg.topic == 'WeakOnly' ? 'Mixed' : cfg.topic,
           'questions': cfg.objectiveQuestions,
-          'minutes': cfg.mode == ExamMode.practice
-              ? 20
-              : (cfg.durationMinutes ~/ 2).clamp(10, 90),
+          'minutes': cfg.mode == ExamMode.practice ? 20 : (cfg.durationMinutes ~/ 2).clamp(10, 90),
           'examMode': true,
           'sessionType': cfg.sessionType,
           'gradingType': cfg.gradingType,
@@ -206,20 +206,23 @@ class _ExamRunViewState extends State<ExamRunView> {
     final pending = cfg.sections.where((s) => !_doneSections.contains(s)).toList();
     final confirm = await Get.dialog<bool>(
       AlertDialog(
-        title: Text(pending.isEmpty ? 'Submit ${_sessionLabel(cfg.sessionType)}?' : 'End and submit now?'),
-        content: Text(
-          pending.isEmpty
-              ? 'All enabled sections have been completed. Submit your ${_sessionLabel(cfg.sessionType).toLowerCase()} now?'
-              : 'You still have ${pending.length} section${pending.length == 1 ? '' : 's'} not completed. Submit only the completed work now?',
+        title: Text(pending.isEmpty ? 'Final review' : 'Submit incomplete ${_sessionLabel(cfg.sessionType).toLowerCase()}?'),
+        content: _FinalReviewDialogContent(
+          pending: pending.map(_sectionTitle).toList(),
+          completed: _doneSections.map(_sectionTitle).toList(),
+          sessionLabel: _sessionLabel(cfg.sessionType),
+          whiteboardRequired: cfg.requiresWhiteboard,
+          hasWhiteboard: ctrl.hasWhiteboardSketch,
         ),
         actions: [
           TextButton(
             onPressed: () => Get.back(result: false),
             child: const Text('Continue working'),
           ),
-          FilledButton(
+          FilledButton.icon(
             onPressed: _hasAnySubmittedSection ? () => Get.back(result: true) : null,
-            child: const Text('Submit now'),
+            icon: const Icon(Icons.verified_rounded),
+            label: const Text('Submit final'),
           ),
         ],
       ),
@@ -263,6 +266,19 @@ class _ExamRunViewState extends State<ExamRunView> {
     }
   }
 
+  String _sectionHint(String section) {
+    switch (section) {
+      case ExamSectionType.objective:
+        return '${cfg.objectiveQuestions} questions • timed CBT section';
+      case ExamSectionType.fillBlank:
+        return '${cfg.fillBlankQuestions} short answers • keyword scoring';
+      case ExamSectionType.theory:
+        return '${cfg.theoryQuestions} theory task${cfg.theoryQuestions == 1 ? '' : 's'} • essay/whiteboard support';
+      default:
+        return 'Exam section';
+    }
+  }
+
   String _sessionLabel(String type) {
     return type == SessionType.assessment ? 'Assessment' : 'Examination';
   }
@@ -279,6 +295,7 @@ class _ExamRunViewState extends State<ExamRunView> {
       policy.shuffleQuestions ? 'shuffled questions' : 'fixed order',
       policy.lockCopyPaste ? 'copy/paste locked' : 'copy/paste allowed',
       if (policy.calculatorEnabled) 'calculator enabled',
+      'autosave/recovery active',
     ].join(' • ');
   }
 
@@ -293,33 +310,49 @@ class _ExamRunViewState extends State<ExamRunView> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: _RunHero(
-                title: '${cfg.courseCode} - ${_sessionLabel(cfg.sessionType)}',
-                subtitle: _useProctoring
-                    ? 'Protected examination workspace. Start any pending section, then submit when ready.'
-                    : 'Normal assessment workspace. Start sections and submit when ready.',
-                onBack: () => Get.back<void>(),
-              ),
+              child: Obx(() {
+                final doneCount = _doneSections.length;
+                return _RunHero(
+                  title: '${cfg.courseCode} ${_sessionLabel(cfg.sessionType)}',
+                  subtitle: _useProctoring
+                      ? 'Protected live exam workspace. Complete all sections and submit after final review.'
+                      : 'Live assessment workspace. Complete sections and submit after final review.',
+                  minutes: cfg.durationMinutes,
+                  doneCount: doneCount,
+                  totalCount: cfg.sections.length,
+                  onBack: () => Get.back<void>(),
+                );
+              }),
             ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [
+                  Obx(() {
+                    final done = _doneSections;
+                    final progress = cfg.sections.isEmpty ? 0.0 : done.length / cfg.sections.length;
+                    return _ProgressOverviewCard(
+                      progress: progress,
+                      doneCount: done.length,
+                      totalCount: cfg.sections.length,
+                      nextLabel: _nextSection == null ? 'Ready for final submission' : 'Next: ${_sectionTitle(_nextSection!)}',
+                      autosaveLabel: 'Autosave and offline recovery active',
+                    );
+                  }),
+                  const SizedBox(height: 12),
                   if (_useProctoring)
                     Obx(
-                      () => _StatusCard(
-                        icon: Icons.security_rounded,
-                        title: 'Integrity score: ${proctoring.integrityScore.value}',
-                        subtitle: proctoring.isExamPaused.value
-                            ? 'Exam paused for verification.'
-                            : 'Camera, audio, screen, and device checks are active.',
+                      () => _IntegrityCard(
+                        score: proctoring.integrityScore.value,
+                        paused: proctoring.isExamPaused.value,
+                        scanReady: proctoring.examStartupScanCompleted.value,
                       ),
                     )
                   else
-                    _StatusCard(
+                    const _StatusCard(
                       icon: Icons.school_outlined,
                       title: 'Normal mode',
-                      subtitle: 'No camera or audio proctoring is active.',
+                      subtitle: 'No camera/audio proctoring is active for this session.',
                     ),
                   const SizedBox(height: 12),
                   _StatusCard(
@@ -339,6 +372,8 @@ class _ExamRunViewState extends State<ExamRunView> {
                     ),
                   ],
                   const SizedBox(height: 12),
+                  _SectionHeader(title: 'Exam sections', subtitle: 'Open each section, submit it, then return here to continue.'),
+                  const SizedBox(height: 10),
                   Obx(() {
                     final done = _doneSections;
                     return Column(
@@ -349,10 +384,10 @@ class _ExamRunViewState extends State<ExamRunView> {
                               padding: const EdgeInsets.only(bottom: 10),
                               child: _SectionTile(
                                 title: _sectionTitle(section),
+                                subtitle: _sectionHint(section),
                                 done: done.contains(section),
-                                onStart: done.contains(section)
-                                    ? null
-                                    : () => _startSection(section),
+                                active: _nextSection == section,
+                                onStart: done.contains(section) ? null : () => _startSection(section),
                               ),
                             ),
                           )
@@ -363,31 +398,15 @@ class _ExamRunViewState extends State<ExamRunView> {
                   Obx(() {
                     final next = _nextSection;
                     final doneCount = _doneSections.length;
-                    return _GlassCard(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            '$doneCount of ${cfg.sections.length} section${cfg.sections.length == 1 ? '' : 's'} submitted',
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          FilledButton.icon(
-                            onPressed: _startNextSection,
-                            icon: Icon(next == null ? Icons.check_circle_outline : Icons.play_arrow_rounded),
-                            label: Text(next == null ? 'Submit ${_sessionLabel(cfg.sessionType)}' : 'Start ${_sectionTitle(next)}'),
-                          ),
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            onPressed: _hasAnySubmittedSection ? _finishExam : null,
-                            icon: const Icon(Icons.stop_circle_outlined),
-                            label: const Text('End and submit now'),
-                          ),
-                        ],
-                      ),
+                    final pending = cfg.sections.length - doneCount;
+                    return _FinalActionCard(
+                      doneCount: doneCount,
+                      totalCount: cfg.sections.length,
+                      pendingCount: pending,
+                      nextLabel: next == null ? 'Submit ${_sessionLabel(cfg.sessionType)}' : 'Start ${_sectionTitle(next)}',
+                      canSubmit: _hasAnySubmittedSection,
+                      onNext: _startNextSection,
+                      onSubmitNow: _finishExam,
                     );
                   }),
                 ],
@@ -401,9 +420,20 @@ class _ExamRunViewState extends State<ExamRunView> {
 }
 
 class _RunHero extends StatelessWidget {
-  const _RunHero({required this.title, required this.subtitle, required this.onBack});
+  const _RunHero({
+    required this.title,
+    required this.subtitle,
+    required this.minutes,
+    required this.doneCount,
+    required this.totalCount,
+    required this.onBack,
+  });
+
   final String title;
   final String subtitle;
+  final int minutes;
+  final int doneCount;
+  final int totalCount;
   final VoidCallback onBack;
 
   @override
@@ -414,39 +444,112 @@ class _RunHero extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
+        boxShadow: [BoxShadow(blurRadius: 24, offset: const Offset(0, 14), color: cs.primary.withValues(alpha: 0.16))],
       ),
-      child: Row(
-        children: [
-          IconButton.filledTonal(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 20,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.92),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          IconButton.filledTonal(onPressed: onBack, icon: const Icon(Icons.arrow_back_ios_new_rounded)),
+          const SizedBox(width: 10),
+          Expanded(child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 21))),
+          const Icon(Icons.shield_outlined, color: Colors.white),
+        ]),
+        const SizedBox(height: 10),
+        Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700, height: 1.28)),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _HeroPill(label: '$minutes min'),
+          _HeroPill(label: '$doneCount/$totalCount sections'),
+          const _HeroPill(label: 'Autosave active'),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _HeroPill extends StatelessWidget {
+  const _HeroPill({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.17), borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.white.withValues(alpha: 0.22))),
+      child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+    );
+  }
+}
+
+class _ProgressOverviewCard extends StatelessWidget {
+  const _ProgressOverviewCard({
+    required this.progress,
+    required this.doneCount,
+    required this.totalCount,
+    required this.nextLabel,
+    required this.autosaveLabel,
+  });
+
+  final double progress;
+  final int doneCount;
+  final int totalCount;
+  final String nextLabel;
+  final String autosaveLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _GlassCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          CircleAvatar(backgroundColor: cs.primary.withValues(alpha: 0.10), child: Icon(Icons.track_changes_outlined, color: cs.primary)),
+          const SizedBox(width: 10),
+          Expanded(child: Text('Live progress', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 17))),
+          Text('${(progress * 100).round()}%', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900, fontSize: 22)),
+        ]),
+        const SizedBox(height: 12),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: LinearProgressIndicator(value: progress.clamp(0.0, 1.0), minHeight: 10),
+        ),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _MiniBadge(text: '$doneCount of $totalCount submitted', active: doneCount == totalCount),
+          _MiniBadge(text: nextLabel),
+          _MiniBadge(text: autosaveLabel, active: true),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _IntegrityCard extends StatelessWidget {
+  const _IntegrityCard({required this.score, required this.paused, required this.scanReady});
+  final int score;
+  final bool paused;
+  final bool scanReady;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = score >= 70 ? Colors.green.shade700 : score >= 45 ? Colors.orange.shade800 : Theme.of(context).colorScheme.error;
+    return _GlassCard(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(paused ? Icons.pause_circle_outline_rounded : Icons.security_rounded, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Integrity score: $score', style: const TextStyle(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 4),
+            Text(
+              paused
+                  ? 'Exam paused for verification.'
+                  : scanReady
+                      ? 'Camera, audio, environment, screen, and device checks are active.'
+                      : 'Startup scan is not fully completed yet.',
+              style: _mutedStyle(context),
             ),
-          ),
-        ],
-      ),
+          ]),
+        ),
+      ]),
     );
   }
 }
@@ -461,78 +564,66 @@ class _StatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return _GlassCard(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: cs.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.72),
-                    fontWeight: FontWeight.w600,
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: cs.primary),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: _mutedStyle(context)),
+        ])),
+      ]),
     );
   }
 }
 
-class _SectionTile extends StatelessWidget {
-  const _SectionTile({required this.title, required this.done, required this.onStart});
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, required this.subtitle});
   final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+      const SizedBox(height: 4),
+      Text(subtitle, style: _mutedStyle(context)),
+    ]);
+  }
+}
+
+class _SectionTile extends StatelessWidget {
+  const _SectionTile({required this.title, required this.subtitle, required this.done, required this.active, required this.onStart});
+  final String title;
+  final String subtitle;
   final bool done;
+  final bool active;
   final VoidCallback? onStart;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final color = done ? Colors.green.shade700 : active ? cs.primary : cs.onSurface.withValues(alpha: 0.50);
     return _GlassCard(
-      child: Row(
-        children: [
-          Icon(
-            done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-            color: done ? Colors.green : cs.primary,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-          if (!done)
-            TextButton.icon(
-              onPressed: onStart,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Start'),
-            )
-          else
-            const Text('Submitted', style: TextStyle(fontWeight: FontWeight.w800)),
-        ],
-      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(done ? Icons.check_circle_rounded : active ? Icons.play_circle_outline_rounded : Icons.radio_button_unchecked_rounded, color: color),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: _mutedStyle(context)),
+        ])),
+        if (!done)
+          TextButton.icon(onPressed: onStart, icon: const Icon(Icons.play_arrow_rounded), label: Text(active ? 'Start' : 'Open'))
+        else
+          const Text('Submitted', style: TextStyle(fontWeight: FontWeight.w800)),
+      ]),
     );
   }
 }
 
 class _WhiteboardCard extends StatelessWidget {
-  const _WhiteboardCard({
-    required this.required,
-    required this.prompt,
-    required this.strokeCount,
-    required this.onOpen,
-  });
+  const _WhiteboardCard({required this.required, required this.prompt, required this.strokeCount, required this.onOpen});
 
   final bool required;
   final String? prompt;
@@ -541,24 +632,117 @@ class _WhiteboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final done = strokeCount > 0;
     return _GlassCard(
-      child: Row(
-        children: [
-          const Icon(Icons.draw_outlined),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '${required ? 'Required' : 'Optional'} whiteboard • $strokeCount strokes${prompt == null ? '' : '\n$prompt'}',
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
+      child: Row(children: [
+        Icon(done ? Icons.check_circle_outline_rounded : Icons.draw_outlined, color: done ? Colors.green.shade700 : Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            '${required ? 'Required' : 'Optional'} whiteboard • $strokeCount strokes${prompt == null ? '' : '\n$prompt'}',
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
-          TextButton.icon(
-            onPressed: onOpen,
-            icon: const Icon(Icons.edit_rounded),
-            label: const Text('Open'),
-          ),
-        ],
-      ),
+        ),
+        TextButton.icon(onPressed: onOpen, icon: const Icon(Icons.edit_rounded), label: const Text('Open')),
+      ]),
+    );
+  }
+}
+
+class _FinalActionCard extends StatelessWidget {
+  const _FinalActionCard({
+    required this.doneCount,
+    required this.totalCount,
+    required this.pendingCount,
+    required this.nextLabel,
+    required this.canSubmit,
+    required this.onNext,
+    required this.onSubmitNow,
+  });
+
+  final int doneCount;
+  final int totalCount;
+  final int pendingCount;
+  final String nextLabel;
+  final bool canSubmit;
+  final VoidCallback onNext;
+  final VoidCallback onSubmitNow;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _GlassCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text('Final review & submission', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 17)),
+        const SizedBox(height: 6),
+        Text(
+          pendingCount == 0
+              ? 'All sections are complete. Review and submit your final work.'
+              : '$pendingCount section${pendingCount == 1 ? '' : 's'} still pending. You can continue or submit completed work only.',
+          style: _mutedStyle(context),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(onPressed: onNext, icon: Icon(pendingCount == 0 ? Icons.verified_rounded : Icons.play_arrow_rounded), label: Text(nextLabel)),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: canSubmit ? onSubmitNow : null,
+          icon: const Icon(Icons.stop_circle_outlined),
+          label: Text(doneCount == totalCount ? 'Open final review' : 'End and submit now'),
+        ),
+      ]),
+    );
+  }
+}
+
+class _FinalReviewDialogContent extends StatelessWidget {
+  const _FinalReviewDialogContent({
+    required this.pending,
+    required this.completed,
+    required this.sessionLabel,
+    required this.whiteboardRequired,
+    required this.hasWhiteboard,
+  });
+
+  final List<String> pending;
+  final List<String> completed;
+  final String sessionLabel;
+  final bool whiteboardRequired;
+  final bool hasWhiteboard;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 420,
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+          pending.isEmpty
+              ? 'All enabled sections have been completed. Submit your ${sessionLabel.toLowerCase()} now?'
+              : 'You still have ${pending.length} pending section${pending.length == 1 ? '' : 's'}. Submit only the completed work now?',
+        ),
+        const SizedBox(height: 12),
+        _DialogLine(icon: Icons.check_circle_outline_rounded, label: 'Completed', value: completed.isEmpty ? 'None yet' : completed.join(', ')),
+        _DialogLine(icon: Icons.pending_outlined, label: 'Pending', value: pending.isEmpty ? 'None' : pending.join(', ')),
+        if (whiteboardRequired) _DialogLine(icon: Icons.draw_outlined, label: 'Whiteboard', value: hasWhiteboard ? 'Submitted' : 'Required'),
+      ]),
+    );
+  }
+}
+
+class _DialogLine extends StatelessWidget {
+  const _DialogLine({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 8),
+        Expanded(child: Text('$label: $value', style: const TextStyle(fontWeight: FontWeight.w700))),
+      ]),
     );
   }
 }
@@ -580,10 +764,34 @@ class _GlassCard extends StatelessWidget {
             color: cs.surface.withValues(alpha: 0.92),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+            boxShadow: [BoxShadow(blurRadius: 16, offset: const Offset(0, 8), color: cs.shadow.withValues(alpha: 0.035))],
           ),
           child: child,
         ),
       ),
     );
   }
+}
+
+class _MiniBadge extends StatelessWidget {
+  const _MiniBadge({required this.text, this.active = false});
+  final String text;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: active ? cs.primary.withValues(alpha: 0.11) : cs.onSurface.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(text, style: TextStyle(color: active ? cs.primary : cs.onSurface, fontWeight: FontWeight.w800, fontSize: 12)),
+    );
+  }
+}
+
+TextStyle _mutedStyle(BuildContext context) {
+  return TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30);
 }
