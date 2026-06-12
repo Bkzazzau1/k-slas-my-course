@@ -1,0 +1,86 @@
+{
+  "seed": 20260325,
+  "imageSize": 128,
+  "gridSize": 16,
+  "classes": [
+    "background",
+    "phone",
+    "laptop"
+  ],
+  "trainingSamplesPerClass": 900,
+  "validationSamplesPerClass": 240,
+  "train": {
+    "accuracy": 0.9137037037037037,
+    "confusionMatrix": [
+      [
+        879,
+        21,
+        0
+      ],
+      [
+        25,
+        791,
+        84
+      ],
+      [
+        7,
+        96,
+        797
+      ]
+    ],
+    "confidenceByClass": {
+      "background": {
+        "meanConfidence": 0.9683972597122192,
+        "p10Confidence": 0.9804778099060059,
+        "p50Confidence": 0.9997790455818176
+      },
+      "phone": {
+        "meanConfidence": 0.869068443775177,
+        "p10Confidence": 0.28648263216018677,
+        "p50Confidence": 0.9999740123748779
+      },
+      "laptop": {
+        "meanConfidence": 0.8833258152008057,
+        "p10Confidence": 0.35336413979530334,
+        "p50Confidence": 0.9999942183494568
+      }
+    }
+  },
+  "validation": {
+    "accuracy": 0.8847222222222222,
+    "confusionMatrix": [
+      [
+        234,
+        6,
+        0
+      ],
+      [
+        11,
+        193,
+        36
+      ],
+      [
+        2,
+        28,
+        210
+      ]
+    ],
+    "confidenceByClass": {
+      "background": {
+        "meanConfidence": 0.970509946346283,
+        "p10Confidence": 0.987700879573822,
+        "p50Confidence": 0.9997929334640503
+      },
+      "phone": {
+        "meanConfidence": 0.8176213502883911,
+        "p10Confidence": 0.10973234474658966,
+        "p50Confidence": 0.9999489188194275
+      },
+      "laptop": {
+        "meanConfidence": 0.8690377473831177,
+        "p10Confidence": 0.24751368165016174,
+        "p50Confidence": 0.9999945163726807
+      }
+    }
+  }
+}

@@ -1,0 +1,53 @@
+name: my_courses
+description: "KASU SmartLearn And ASSESSMENT SYSTEM (K-SLAS)"
+publish_to: "none"
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # --- UI & STATE MANAGEMENT ---
+  cupertino_icons: ^1.0.8
+  get: ^4.7.3
+  get_storage: ^2.1.1
+  uuid: ^4.5.2
+  file_picker: ^8.1.7
+  video_player: ^2.9.2
+
+  # --- K-SLAS INTEGRITY SUITE (NEW) ---
+
+  # 1. OS-Level Security (Prevents screenshots and screen recording)
+  screen_protector: ^1.5.1 # Advanced screen privacy (mirrors/recording)
+
+  # 2. Proximity & Network Detection (Detects nearby devices and network mismatches)
+  flutter_blue_plus: ^1.31.0 # Bluetooth scanning for hidden devices
+  network_info_plus: ^6.1.1 # Fetches Gateway/IP for network mismatch checks
+
+  # 3. Behavioral AI & Continuous Identity (Edge AI processing)
+  camera: ^0.11.0 # Access to camera for side-proctoring
+
+  # 4. Tamper Detection (Detects if phone is picked up or moved)
+  sensors_plus: ^6.1.1 # Gyroscope/Accelerometer monitoring
+
+  # 5. Audio Analysis (Whisper & Ultrasonic Handshake)
+  record: ^6.2.0 # Captures audio for whisper detection
+  fftea: ^1.5.0+1 # Fast Fourier Transform for ultrasonic handshake
+  flutter_rust_bridge: 2.11.1
+  livekit_client: ^2.6.4
+  http: ^1.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/ml_models/

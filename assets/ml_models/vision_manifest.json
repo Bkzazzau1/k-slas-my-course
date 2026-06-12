@@ -1,0 +1,9 @@
+{
+  "modelName": "rust-vision-synth-bootstrap",
+  "modelAsset": "assets/ml_models/forbidden_devices_classifier.onnx",
+  "inputWidth": 128,
+  "inputHeight": 128,
+  "inputChannels": 1,
+  "confidenceThreshold": 0.72,
+  "outputLabels": ["background", "phone", "laptop"]
+}
