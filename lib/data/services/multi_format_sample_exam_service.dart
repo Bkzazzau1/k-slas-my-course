@@ -7,6 +7,7 @@ class MultiFormatSampleExamService {
     MultiFormatQuestionType.objectiveSingle,
     MultiFormatQuestionType.objectiveMultiple,
     MultiFormatQuestionType.fillBlank,
+    MultiFormatQuestionType.dragDrop,
     MultiFormatQuestionType.essay,
     MultiFormatQuestionType.whiteboard,
   ];
@@ -19,7 +20,7 @@ class MultiFormatSampleExamService {
     final selected = formats.toSet();
     return _allQuestions(courseCode: courseCode, topic: _topic(topic))
         .where((question) => selected.contains(question.type))
-        .take(5)
+        .take(6)
         .toList(growable: false);
   }
 
@@ -37,12 +38,7 @@ class MultiFormatSampleExamService {
         type: MultiFormatQuestionType.objectiveSingle,
         questionText:
             'Which structure gives efficient ordered search when values are inserted according to a left-less-than-root and right-greater-than-root rule?',
-        options: const [
-          'Binary search tree',
-          'Plain queue',
-          'Stack',
-          'Unordered list only',
-        ],
+        options: const ['Binary search tree', 'Plain queue', 'Stack', 'Unordered list only'],
         correctIndexes: const [0],
         points: 1,
         sourceRef: '',
@@ -72,16 +68,26 @@ class MultiFormatSampleExamService {
         sourceRef: '',
       ),
       MultiFormatQuestion(
+        id: 'mf_match_structures',
+        type: MultiFormatQuestionType.dragDrop,
+        questionText:
+            'Match each use case with the most suitable data structure.',
+        dragItems: const [
+          'Process requests in arrival order',
+          'Undo the latest action',
+          'Rank entries by score',
+          'Search records with a key',
+        ],
+        dropTargets: const ['Queue', 'Stack', 'Priority queue', 'Hash table'],
+        points: 4,
+        sourceRef: '',
+      ),
+      MultiFormatQuestion(
         id: 'mf_essay_selection',
         type: MultiFormatQuestionType.essay,
         questionText:
             'A course-registration system must search student records, process requests in arrival order, and rank students by score. Recommend suitable data structures and justify each recommendation.',
-        correctTextAnswers: const [
-          'hash table',
-          'queue',
-          'priority queue',
-          'time complexity',
-        ],
+        correctTextAnswers: const ['hash table', 'queue', 'priority queue', 'time complexity'],
         points: 10,
         sourceRef: '',
       ),
