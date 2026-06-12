@@ -105,8 +105,6 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
         rotationCovered: false,
       );
 
-      // Vision model warm-up must not be confused with camera permission.
-      // Camera preview can still continue if the local AI warm-up is unavailable.
       try {
         await RustBrainService.instance.ensureVisionModelLoaded();
       } catch (_) {}
@@ -215,9 +213,19 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
   }
 
   Future<void> _returnToDashboard() async {
+    try {
+      await _cameraController?.stopImageStream();
+    } catch (_) {}
+    try {
+      await _cameraController?.dispose();
+    } catch (_) {}
+    _cameraController = null;
+
+    // Navigate first. Calling stopSession first can close this dialog and leave
+    // the Windows desktop shell with an empty route stack.
+    Get.offAllNamed('/main');
+    await Future<void>.delayed(const Duration(milliseconds: 80));
     await _proctoring.stopSession(silent: true);
-    if (!mounted) return;
-    Get.offAllNamed('/');
   }
 
   Future<void> _retryCameraPermission() async {
