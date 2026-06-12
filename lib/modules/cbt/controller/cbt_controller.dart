@@ -9,6 +9,7 @@ import '../../../data/models/exam_models.dart';
 import '../../../data/services/cbt_attempt_storage.dart';
 import '../../../data/services/cbt_question_service.dart';
 import '../../../data/services/graded_session_template_service.dart';
+import '../../../data/services/storage_service.dart';
 import '../../revision/controller/revision_controller.dart';
 
 class CBTController extends GetxController {
@@ -35,13 +36,19 @@ class CBTController extends GetxController {
   final index = 0.obs;
   final selectedIndex = RxnInt();
   final answers = <String, int>{}.obs;
+  final markedForReview = <String>{}.obs;
   final correctCount = 0.obs;
   final secondsLeft = 0.obs;
   final isPaused = false.obs;
+  final lastAutoSavedAt = Rxn<DateTime>();
 
   Timer? _timer;
+  Timer? _autosaveTimer;
   bool _isSubmitting = false;
   DateTime? _startedAt;
+
+  String get _draftKey =>
+      'assessmentDraft.$courseCode.$sessionType.$gradingType.$topic.objective';
 
   void start({
     required String course,
@@ -75,7 +82,7 @@ class CBTController extends GetxController {
 
     final shouldLockToBackend =
         questionSource == QuestionSourceType.lecturerAdmin ||
-        gradingType == GradingType.graded;
+            gradingType == GradingType.graded;
 
     final backendTemplate = shouldLockToBackend
         ? GradedSessionTemplateService.templateFor(
@@ -95,10 +102,12 @@ class CBTController extends GetxController {
     _startedAt = DateTime.now();
     _isSubmitting = false;
     answers.clear();
+    markedForReview.clear();
     correctCount.value = 0;
     index.value = 0;
     selectedIndex.value = null;
     isPaused.value = false;
+    lastAutoSavedAt.value = null;
 
     final pool = CBTQuestionService.loadQuestions(
       courseCode: courseCode,
@@ -115,12 +124,15 @@ class CBTController extends GetxController {
 
     if (questions.isEmpty) {
       _timer?.cancel();
+      _autosaveTimer?.cancel();
       secondsLeft.value = 0;
       return;
     }
 
+    _restoreDraftIfAvailable();
+
     _timer?.cancel();
-    secondsLeft.value = durationMinutes * 60;
+    secondsLeft.value = secondsLeft.value > 0 ? secondsLeft.value : durationMinutes * 60;
     if (mode != 'Untimed') {
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (_isSubmitting || isPaused.value) return;
@@ -130,16 +142,23 @@ class CBTController extends GetxController {
         }
       });
     }
+
+    _autosaveTimer?.cancel();
+    _autosaveTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (!_isSubmitting) saveDraft();
+    });
   }
 
   void pauseTimer() {
     if (mode == 'Untimed') return;
     isPaused.value = true;
+    saveDraft();
   }
 
   void resumeTimer() {
     if (mode == 'Untimed') return;
     isPaused.value = false;
+    saveDraft();
   }
 
   CBTQuestionModel get current => questions[index.value];
@@ -147,16 +166,38 @@ class CBTController extends GetxController {
   void pick(int optionIndex) {
     selectedIndex.value = optionIndex;
     answers[current.id] = optionIndex;
+    saveDraft();
   }
+
+  void toggleCurrentReview() {
+    if (markedForReview.contains(current.id)) {
+      markedForReview.remove(current.id);
+    } else {
+      markedForReview.add(current.id);
+    }
+    saveDraft();
+  }
+
+  void jumpTo(int targetIndex) {
+    if (targetIndex < 0 || targetIndex >= questions.length) return;
+    index.value = targetIndex;
+    selectedIndex.value = answers[current.id];
+    saveDraft();
+  }
+
+  bool isAnswered(String questionId) => answers.containsKey(questionId);
+  bool isMarked(String questionId) => markedForReview.contains(questionId);
 
   void setWhiteboardStrokeCount(int count) {
     whiteboardStrokeCount = count < 0 ? 0 : count;
+    saveDraft();
   }
 
   void next() {
     if (index.value < questions.length - 1) {
       index.value++;
       selectedIndex.value = answers[current.id];
+      saveDraft();
     }
   }
 
@@ -164,7 +205,69 @@ class CBTController extends GetxController {
     if (index.value > 0) {
       index.value--;
       selectedIndex.value = answers[current.id];
+      saveDraft();
     }
+  }
+
+  void saveDraft() {
+    if (questions.isEmpty) return;
+    final now = DateTime.now();
+    StorageService.box.write(_draftKey, {
+      'answers': answers.map((key, value) => MapEntry(key, value)),
+      'marked': markedForReview.toList(),
+      'index': index.value,
+      'secondsLeft': secondsLeft.value,
+      'whiteboardStrokeCount': whiteboardStrokeCount,
+      'savedAt': now.toIso8601String(),
+    });
+    lastAutoSavedAt.value = now;
+  }
+
+  void _restoreDraftIfAvailable() {
+    final raw = StorageService.box.read(_draftKey);
+    if (raw is! Map) return;
+    final validQuestionIds = questions.map((q) => q.id).toSet();
+
+    final rawAnswers = raw['answers'];
+    if (rawAnswers is Map) {
+      rawAnswers.forEach((key, value) {
+        final questionId = key.toString();
+        final selected = value is int ? value : int.tryParse(value.toString());
+        if (selected != null && validQuestionIds.contains(questionId)) {
+          answers[questionId] = selected;
+        }
+      });
+    }
+
+    final rawMarked = raw['marked'];
+    if (rawMarked is List) {
+      markedForReview.addAll(
+        rawMarked.map((e) => e.toString()).where(validQuestionIds.contains),
+      );
+    }
+
+    final savedIndex = raw['index'];
+    final restoredIndex = savedIndex is int
+        ? savedIndex
+        : int.tryParse(savedIndex?.toString() ?? '') ?? 0;
+    index.value = restoredIndex.clamp(0, questions.length - 1);
+    selectedIndex.value = answers[current.id];
+
+    final savedSeconds = raw['secondsLeft'];
+    final restoredSeconds = savedSeconds is int
+        ? savedSeconds
+        : int.tryParse(savedSeconds?.toString() ?? '') ?? 0;
+    if (restoredSeconds > 0 && restoredSeconds <= durationMinutes * 60) {
+      secondsLeft.value = restoredSeconds;
+    }
+
+    final savedWhiteboardCount = raw['whiteboardStrokeCount'];
+    whiteboardStrokeCount = savedWhiteboardCount is int
+        ? savedWhiteboardCount
+        : int.tryParse(savedWhiteboardCount?.toString() ?? '') ?? whiteboardStrokeCount;
+
+    final savedAt = DateTime.tryParse(raw['savedAt']?.toString() ?? '');
+    if (savedAt != null) lastAutoSavedAt.value = savedAt;
   }
 
   Future<CBTAttemptModel?> submit({bool returnAttempt = false}) async {
@@ -172,6 +275,7 @@ class CBTController extends GetxController {
     _isSubmitting = true;
     try {
       _timer?.cancel();
+      _autosaveTimer?.cancel();
       isPaused.value = false;
 
       int correct = 0;
@@ -230,6 +334,7 @@ class CBTController extends GetxController {
       );
 
       await CBTAttemptStorage.saveAttempt(courseCode, attempt);
+      await StorageService.box.remove(_draftKey);
 
       try {
         final rev = Get.find<RevisionPlanController>();
@@ -250,6 +355,7 @@ class CBTController extends GetxController {
   @override
   void onClose() {
     _timer?.cancel();
+    _autosaveTimer?.cancel();
     super.onClose();
   }
 }
