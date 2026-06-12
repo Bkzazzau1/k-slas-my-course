@@ -25,6 +25,7 @@ abstract class Routes {
   static const theoryRewrite = '/theory/rewrite';
   static const assignments = '/assignments';
   static const results = '/results';
+  static const notifications = '/notifications';
   static const liveSessions = '/live-sessions';
   static const liveSessionRoom = '/live-sessions/room';
 }
