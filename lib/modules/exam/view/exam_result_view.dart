@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/exam_models.dart';
+import '../../../data/services/submission_history_service.dart';
 import '../../proctoring/controller/proctoring_controller.dart';
 
 class ExamResultView extends StatelessWidget {
@@ -31,6 +33,14 @@ class ExamResultView extends StatelessWidget {
         : warningCount > 0
             ? 'Submitted - Under Review'
             : 'Submitted - Warning';
+
+    unawaited(SubmissionHistoryService.saveExamResult(
+      res,
+      receiptNumber: receipt,
+      status: status,
+      integrityScore: integrityScore,
+      warningCount: warningCount,
+    ));
 
     return Scaffold(
       body: LuxuryScaffold(
