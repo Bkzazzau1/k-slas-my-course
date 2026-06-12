@@ -26,6 +26,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
   _CheckStepState _acoustic = _CheckStepState.pending;
   _CheckStepState _identity = _CheckStepState.pending;
   bool _running = false;
+  bool _permissionNoticeAccepted = false;
   String? _errorText;
 
   @override
@@ -34,8 +35,86 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
     _proctoring = Get.find<ProctoringController>();
   }
 
+  Future<bool> _showPermissionNotice() async {
+    final allowed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
+        return AlertDialog(
+          title: const Text('Allow exam verification permissions'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'K-SLAS needs these permissions before the ${widget.sessionLabel.toLowerCase()} can start:',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              const _PermissionLine(
+                icon: Icons.camera_alt_rounded,
+                label: 'Camera for face and environment scan',
+              ),
+              const _PermissionLine(
+                icon: Icons.mic_rounded,
+                label: 'Microphone for acoustic integrity checks',
+              ),
+              const _PermissionLine(
+                icon: Icons.screen_lock_portrait_rounded,
+                label: 'Motion and screen-integrity monitoring',
+              ),
+              const _PermissionLine(
+                icon: Icons.devices_other_rounded,
+                label: 'Network and connected-device safety checks',
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Your browser or operating system may show its own permission popup next. Choose Allow to continue.',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).pop(false),
+              icon: const Icon(Icons.dashboard_rounded),
+              label: const Text('Return to dashboard'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.verified_user_rounded),
+              label: const Text('Allow and continue'),
+            ),
+          ],
+        );
+      },
+    );
+    return allowed == true;
+  }
+
+  Future<void> _returnToDashboard() async {
+    await _proctoring.stopSession(silent: true);
+    if (!mounted) return;
+    Navigator.of(context).pop(false);
+    Get.offAllNamed('/');
+  }
+
   Future<void> _runChecks() async {
     if (_running) return;
+
+    if (!_permissionNoticeAccepted) {
+      final accepted = await _showPermissionNotice();
+      if (!mounted) return;
+      if (!accepted) {
+        await _returnToDashboard();
+        return;
+      }
+      _permissionNoticeAccepted = true;
+    }
 
     setState(() {
       _running = true;
@@ -51,7 +130,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
       setState(() {
         _fortress = _CheckStepState.failed;
         _running = false;
-        _errorText = "Security fortress could not be activated.";
+        _errorText = 'Security fortress could not be activated.';
       });
       return;
     }
@@ -67,7 +146,8 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
       setState(() {
         _identity = _CheckStepState.failed;
         _running = false;
-        _errorText = "Identity/environment checks failed.";
+        _errorText =
+            'Identity or environment verification failed. You can retry or return to the dashboard.';
       });
       return;
     }
@@ -84,7 +164,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
         _acoustic = _CheckStepState.failed;
         _running = false;
         _errorText =
-            "Acoustic tether is unstable. Adjust the room/device audio and retry. The ${widget.sessionLabel.toLowerCase()} has not started.";
+            'Microphone/audio verification failed. Allow microphone access, check your audio, then retry.';
       });
       return;
     }
@@ -108,7 +188,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
         contentPadding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
         actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         title: Text(
-          "K-SLAS ${widget.sessionLabel} Gateway",
+          'K-SLAS ${widget.sessionLabel} Gateway',
           style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900),
         ),
         content: Column(
@@ -116,16 +196,26 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "${widget.sessionLabel} ID: ${widget.examId}",
+              '${widget.sessionLabel} ID: ${widget.examId}',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.65),
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 12),
-            _CheckRow(label: "OS fortress (anti-capture)", state: _fortress),
-            _CheckRow(label: "Identity + environment check", state: _identity),
-            _CheckRow(label: "Acoustic tether (background)", state: _acoustic),
+            _CheckRow(label: 'OS fortress anti-capture', state: _fortress),
+            _CheckRow(label: 'Camera identity and environment check', state: _identity),
+            _CheckRow(label: 'Microphone acoustic tether', state: _acoustic),
+            if (!_permissionNoticeAccepted) ...[
+              const SizedBox(height: 10),
+              Text(
+                'You will be asked to allow camera, microphone, and integrity permissions before verification starts.',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
             if (_errorText != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -136,9 +226,10 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: _running ? null : () => Navigator.of(context).pop(false),
-            child: const Text("Cancel"),
+          TextButton.icon(
+            onPressed: _running ? null : _returnToDashboard,
+            icon: const Icon(Icons.dashboard_rounded),
+            label: const Text('Dashboard'),
           ),
           FilledButton.icon(
             onPressed: _running ? null : _runChecks,
@@ -149,7 +240,33 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.verified_user_outlined),
-            label: Text(_running ? "Verifying..." : "Verify and start"),
+            label: Text(_running ? 'Verifying...' : 'Verify and start'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PermissionLine extends StatelessWidget {
+  const _PermissionLine({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
