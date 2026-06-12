@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../app/main_nav/main_nav_view.dart';
+import '../../../app/routes/app_routes.dart';
+import '../../../data/services/student_notification_service.dart';
 import '../controller/dashboard_controller.dart';
 
 class DashboardTopBar extends GetView<DashboardController> {
@@ -13,6 +15,7 @@ class DashboardTopBar extends GetView<DashboardController> {
   @override
   Widget build(BuildContext context) {
     final muted = cs.onSurface.withAlpha((0.65 * 255).toInt());
+    final unread = StudentNotificationService.unreadCount();
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,13 +54,38 @@ class DashboardTopBar extends GetView<DashboardController> {
         ),
         Row(
           children: [
-            IconButton(
-              tooltip: "Notifications",
-              onPressed: () {},
-              icon: Icon(
-                Icons.notifications_none_outlined,
-                color: cs.onSurface,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                IconButton(
+                  tooltip: "Notifications",
+                  onPressed: () => Get.toNamed(Routes.notifications),
+                  icon: Icon(
+                    Icons.notifications_none_outlined,
+                    color: cs.onSurface,
+                  ),
+                ),
+                if (unread > 0)
+                  Positioned(
+                    right: 6,
+                    top: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: cs.error,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        unread > 9 ? '9+' : '$unread',
+                        style: TextStyle(
+                          color: cs.onError,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             IconButton(
               tooltip: "Settings",
@@ -149,8 +177,6 @@ class _PrimaryCourseChip extends GetView<DashboardController> {
               ),
             ),
             const SizedBox(width: 10),
-
-            // ✅ FIXED: Flexible instead of Expanded
             Flexible(
               fit: FlexFit.loose,
               child: Column(
@@ -180,9 +206,7 @@ class _PrimaryCourseChip extends GetView<DashboardController> {
                 ],
               ),
             ),
-
             const SizedBox(width: 10),
-
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -228,20 +252,24 @@ class _NextExamPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: cs.secondary.withAlpha((0.14 * 255).toInt()),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.secondary.withAlpha((0.18 * 255).toInt())),
+        color: cs.primary.withAlpha((0.08 * 255).toInt()),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.primary.withAlpha((0.14 * 255).toInt())),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: cs.secondary),
-          const SizedBox(width: 8),
+          Icon(icon, size: 16, color: cs.primary),
+          const SizedBox(width: 6),
           Text(
             text,
-            style: TextStyle(color: cs.secondary, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: cs.primary,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
