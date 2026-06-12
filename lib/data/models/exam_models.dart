@@ -41,7 +41,7 @@ extension ExamDeliveryModeX on ExamDeliveryMode {
   String get label {
     switch (this) {
       case ExamDeliveryMode.centerBased:
-        return 'Distance Self-Practice';
+        return 'Normal / No Proctoring';
       case ExamDeliveryMode.remoteProctored:
         return 'Remote (Proctored)';
     }
@@ -56,8 +56,10 @@ extension ExamDeliveryModeX on ExamDeliveryMode {
       case 'center':
       case 'centerbased':
       case 'center_based':
+      case 'normal':
+      case 'ungraded':
       default:
-        return ExamDeliveryMode.remoteProctored;
+        return ExamDeliveryMode.centerBased;
     }
   }
 }
@@ -103,7 +105,7 @@ class ExamConfig {
 
   bool get isGraded => gradingType == GradingType.graded;
   bool get isRemoteProctored =>
-      deliveryMode == ExamDeliveryMode.remoteProctored;
+      isGraded && deliveryMode == ExamDeliveryMode.remoteProctored;
   bool get isCenterBased => deliveryMode == ExamDeliveryMode.centerBased;
   bool get requiresWhiteboard =>
       isGraded && whiteboardEnabled && whiteboardRequired;
