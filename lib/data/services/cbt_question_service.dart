@@ -1,10 +1,6 @@
-import 'package:uuid/uuid.dart';
-
 import '../models/cbt_models.dart';
 
 class CBTQuestionService {
-  static final _uuid = const Uuid();
-
   static List<CBTQuestionModel> loadQuestions({
     required String courseCode,
     String? topic,
@@ -12,7 +8,7 @@ class CBTQuestionService {
     final code = courseCode.trim().isEmpty ? 'CSC 305' : courseCode.trim();
     final all = <CBTQuestionModel>[
       CBTQuestionModel(
-        id: _uuid.v4(),
+        id: 'csc305_binary_search_condition',
         courseCode: code,
         topic: 'Data Structures',
         question:
@@ -28,7 +24,7 @@ class CBTQuestionService {
             'Binary search depends on ordered records and comparison with the middle item.',
       ),
       CBTQuestionModel(
-        id: _uuid.v4(),
+        id: 'csc305_bst_left_child_rule',
         courseCode: code,
         topic: 'Trees',
         question:
@@ -44,7 +40,7 @@ class CBTQuestionService {
             'A binary search tree keeps smaller values on the left and larger values on the right.',
       ),
       CBTQuestionModel(
-        id: _uuid.v4(),
+        id: 'csc305_queue_fifo_service',
         courseCode: code,
         topic: 'Queues and Stacks',
         question:
@@ -60,7 +56,7 @@ class CBTQuestionService {
             'A queue follows first-in, first-out processing.',
       ),
       CBTQuestionModel(
-        id: _uuid.v4(),
+        id: 'csc305_quicksort_average_complexity',
         courseCode: code,
         topic: 'Algorithms',
         question:
@@ -76,7 +72,7 @@ class CBTQuestionService {
             'Balanced partitioning gives logarithmic levels with linear work across each level.',
       ),
       CBTQuestionModel(
-        id: _uuid.v4(),
+        id: 'csc305_bfs_shortest_path',
         courseCode: code,
         topic: 'Graphs',
         question:
@@ -92,7 +88,7 @@ class CBTQuestionService {
             'Breadth-first search explores vertices level by level.',
       ),
       CBTQuestionModel(
-        id: _uuid.v4(),
+        id: 'csc305_pairwise_complexity',
         courseCode: code,
         topic: 'Complexity Analysis',
         question:
