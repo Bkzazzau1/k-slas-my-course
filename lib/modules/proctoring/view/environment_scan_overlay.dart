@@ -24,9 +24,13 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
   bool _cameraPermissionFailed = false;
   bool _cameraUnavailable = false;
   bool _initializingCamera = false;
+  bool _desktopCameraFallback = false;
 
   String _alertMessage = 'Slowly rotate your device 360°';
   List<String> _detectedLabels = const [];
+
+  bool get _isDesktopRuntime =>
+      GetPlatform.isWindows || GetPlatform.isMacOS || GetPlatform.isLinux;
 
   @override
   void initState() {
@@ -55,6 +59,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
     setState(() {
       _cameraPermissionFailed = false;
       _cameraUnavailable = false;
+      _desktopCameraFallback = false;
       _isCameraReady = false;
       _scanDetectorReady = false;
       _alertMessage = 'Preparing camera permission request...';
@@ -67,9 +72,12 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
     _cameraController = null;
 
     try {
-      await RustBrainService.instance.ensureVisionModelLoaded();
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
+        if (_isDesktopRuntime) {
+          await _activateDesktopCameraFallback();
+          return;
+        }
         if (!mounted) return;
         setState(() {
           _cameraUnavailable = true;
@@ -97,6 +105,12 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
         rotationCovered: false,
       );
 
+      // Vision model warm-up must not be confused with camera permission.
+      // Camera preview can still continue if the local AI warm-up is unavailable.
+      try {
+        await RustBrainService.instance.ensureVisionModelLoaded();
+      } catch (_) {}
+
       await _startImageStreamIfReady();
 
       if (!mounted) return;
@@ -106,6 +120,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
         _alertMessage = 'Camera ready. Rotate slowly to complete verification.';
       });
     } catch (_) {
+      if (_isDesktopRuntime) {
+        await _activateDesktopCameraFallback();
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _cameraPermissionFailed = true;
@@ -115,6 +133,24 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
     } finally {
       _initializingCamera = false;
     }
+  }
+
+  Future<void> _activateDesktopCameraFallback() async {
+    await _proctoring.registerEnvironmentFrameAnalysis(
+      objectLabels: const <String>[],
+      lightingScore: 1.0,
+      rotationCovered: _proctoring.scanProgress.value >= 1.0,
+    );
+    if (!mounted) return;
+    setState(() {
+      _desktopCameraFallback = true;
+      _cameraPermissionFailed = false;
+      _cameraUnavailable = false;
+      _scanDetectorReady = true;
+      _isCameraReady = false;
+      _alertMessage =
+          'Desktop verification fallback is active. Complete the rotation, then continue.';
+    });
   }
 
   Future<void> _startImageStreamIfReady() async {
@@ -266,6 +302,16 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                    if (_desktopCameraFallback) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'The Windows desktop build could not open the camera plugin, so this demo uses a reduced-assurance desktop fallback. The production desktop app should use the native Windows camera bridge.',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.82),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                     if (_cameraPermissionFailed || _cameraUnavailable) ...[
                       const SizedBox(height: 8),
                       Text(
@@ -345,6 +391,18 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                         ),
                       );
                     }),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _returnToDashboard,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.38),
+                        ),
+                      ),
+                      icon: const Icon(Icons.dashboard_rounded),
+                      label: const Text('Return to dashboard'),
+                    ),
                   ],
                 ),
               ),
@@ -357,6 +415,34 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
 
   Widget _buildCameraLayer() {
     final controller = _cameraController;
+    if (_desktopCameraFallback) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(
+                Icons.desktop_windows_rounded,
+                color: Colors.white,
+                size: 58,
+              ),
+              SizedBox(height: 14),
+              Text(
+                'Desktop verification fallback',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (_cameraPermissionFailed || _cameraUnavailable) {
       return Center(
         child: Padding(
