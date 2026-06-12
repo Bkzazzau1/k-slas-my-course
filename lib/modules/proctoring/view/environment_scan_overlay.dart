@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -23,8 +21,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
   bool _scanDetectorReady = false;
   bool _isObjectDetected = false;
   bool _isCameraReady = false;
+  bool _cameraPermissionFailed = false;
+  bool _cameraUnavailable = false;
+  bool _initializingCamera = false;
 
-  String _alertMessage = "Slowly rotate your device 360°";
+  String _alertMessage = 'Slowly rotate your device 360°';
   List<String> _detectedLabels = const [];
 
   @override
@@ -48,20 +49,37 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
   }
 
   Future<void> _initializeScanPipeline() async {
+    if (_initializingCamera) return;
+    _initializingCamera = true;
+
+    setState(() {
+      _cameraPermissionFailed = false;
+      _cameraUnavailable = false;
+      _isCameraReady = false;
+      _scanDetectorReady = false;
+      _alertMessage = 'Preparing camera permission request...';
+    });
+
+    try {
+      await _cameraController?.stopImageStream();
+    } catch (_) {}
+    await _cameraController?.dispose();
+    _cameraController = null;
+
     try {
       await RustBrainService.instance.ensureVisionModelLoaded();
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
-        _proctoring.handleViolation('camera unavailable');
         if (!mounted) return;
         setState(() {
-          _alertMessage = "Camera not available for environment scan.";
+          _cameraUnavailable = true;
+          _alertMessage = 'No camera was found on this device.';
         });
         return;
       }
 
       final back = cameras.where(
-        (c) => c.lensDirection == CameraLensDirection.back,
+        (camera) => camera.lensDirection == CameraLensDirection.back,
       );
       final selected = back.isNotEmpty ? back.first : cameras.first;
 
@@ -69,26 +87,33 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
         selected,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: Platform.isIOS
-            ? ImageFormatGroup.bgra8888
-            : ImageFormatGroup.yuv420,
       );
       _cameraController = controller;
       await controller.initialize();
+
+      await _proctoring.registerEnvironmentFrameAnalysis(
+        objectLabels: const <String>[],
+        lightingScore: 1.0,
+        rotationCovered: false,
+      );
+
       await _startImageStreamIfReady();
 
       if (!mounted) return;
       setState(() {
         _scanDetectorReady = true;
         _isCameraReady = true;
+        _alertMessage = 'Camera ready. Rotate slowly to complete verification.';
       });
     } catch (_) {
-      _proctoring.handleViolation('camera access denied');
       if (!mounted) return;
       setState(() {
+        _cameraPermissionFailed = true;
         _alertMessage =
-            "Camera permission is required. Allow access to continue scan.";
+            'Camera permission is required. Allow access to continue scan.';
       });
+    } finally {
+      _initializingCamera = false;
     }
   }
 
@@ -101,7 +126,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
     try {
       await controller.startImageStream(_processFrame);
     } catch (_) {
-      // ignore repeated stream start failures.
+      // Some desktop/web camera implementations allow preview but not image streaming.
     }
   }
 
@@ -110,12 +135,15 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
     _isProcessingFrame = true;
 
     try {
+      final pixelFormat = image.format.group == ImageFormatGroup.bgra8888
+          ? 'bgra8888'
+          : 'luma8';
       final analysis = RustBrainService.instance.analyzeScanFrame(
         plane0Bytes: image.planes.first.bytes,
         width: image.width,
         height: image.height,
         bytesPerRow: image.planes.first.bytesPerRow,
-        pixelFormat: Platform.isIOS ? 'bgra8888' : 'luma8',
+        pixelFormat: pixelFormat,
       );
       await _proctoring.registerEnvironmentFrameAnalysis(
         objectLabels: analysis.objectLabels,
@@ -135,19 +163,29 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
         _isObjectDetected = forbidden.isNotEmpty;
         if (_isObjectDetected) {
           _alertMessage =
-              "Forbidden device detected in scan (${forbidden.join(", ")}).";
+              'Forbidden device detected in scan (${forbidden.join(', ')}).';
         } else if (analysis.lightingScore <
             _proctoring.minimumScanLightingScore) {
-          _alertMessage = "Increase room lighting to complete scan.";
+          _alertMessage = 'Increase room lighting to complete scan.';
         } else {
-          _alertMessage = "Scan in progress. Keep rotating your device.";
+          _alertMessage = 'Scan in progress. Keep rotating your device.';
         }
       });
     } catch (_) {
-      // Keep scan running even when single-frame inference fails.
+      // Keep scan running even when one frame cannot be analysed.
     } finally {
       _isProcessingFrame = false;
     }
+  }
+
+  Future<void> _returnToDashboard() async {
+    await _proctoring.stopSession(silent: true);
+    if (!mounted) return;
+    Get.offAllNamed('/');
+  }
+
+  Future<void> _retryCameraPermission() async {
+    await _initializeScanPipeline();
   }
 
   @override
@@ -202,7 +240,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.68),
+                  color: Colors.black.withValues(alpha: 0.72),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.16),
@@ -228,10 +266,47 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+                    if (_cameraPermissionFailed || _cameraUnavailable) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        _cameraUnavailable
+                            ? 'Connect a camera, then return to verification.'
+                            : 'Use the browser or system permission popup to allow camera access. If you already denied it, enable camera permission from the address bar or app settings.',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.82),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _cameraUnavailable
+                                ? null
+                                : _retryCameraPermission,
+                            icon: const Icon(Icons.camera_alt_rounded),
+                            label: const Text('Try camera again'),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: _returnToDashboard,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.45),
+                              ),
+                            ),
+                            icon: const Icon(Icons.dashboard_rounded),
+                            label: const Text('Return to dashboard'),
+                          ),
+                        ],
+                      ),
+                    ],
                     if (_detectedLabels.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(
-                        "Detected: ${_detectedLabels.join(", ")}",
+                        'Detected: ${_detectedLabels.join(', ')}',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.86),
                           fontWeight: FontWeight.w600,
@@ -240,6 +315,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                     ],
                     Obx(() {
                       final canComplete =
+                          !_cameraPermissionFailed &&
+                          !_cameraUnavailable &&
                           _proctoring.scanProgress.value >= 1.0 &&
                           _proctoring.scanRotationConfirmed.value &&
                           _proctoring.scanLightingScore.value >=
@@ -261,8 +338,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                             ),
                             child: Text(
                               canComplete
-                                  ? "Complete scan and continue"
-                                  : "Keep scanning...",
+                                  ? 'Complete scan and continue'
+                                  : 'Keep scanning...',
                             ),
                           ),
                         ),
@@ -280,6 +357,36 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
 
   Widget _buildCameraLayer() {
     final controller = _cameraController;
+    if (_cameraPermissionFailed || _cameraUnavailable) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.no_photography_rounded,
+                color: Colors.white,
+                size: 58,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                _cameraUnavailable
+                    ? 'Camera not available'
+                    : 'Camera permission needed',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 20,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     if (!_isCameraReady ||
         controller == null ||
         !controller.value.isInitialized) {
@@ -308,14 +415,14 @@ class _TopStatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _pill("Scan ${(progress * 100).round()}%", progress >= 1.0),
+        _pill('Scan ${(progress * 100).round()}%', progress >= 1.0),
         const SizedBox(width: 8),
         _pill(
-          "Light ${(lightingScore * 100).round()}%",
+          'Light ${(lightingScore * 100).round()}%',
           lightingScore >= lightingMin,
         ),
         const SizedBox(width: 8),
-        _pill("Rotation", rotationOk),
+        _pill('Rotation', rotationOk),
       ],
     );
   }
