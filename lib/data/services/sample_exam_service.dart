@@ -14,46 +14,54 @@ class SampleExamService {
     final resolvedTopic = _topic(topic);
     final samples = [
       FillBlankQuestionModel(
-        id: 'fb_bst_order',
+        id: 'fb_bst_property',
         courseCode: courseCode,
         topic: resolvedTopic,
         prompt:
-            'In a binary search tree, left subtree values are ______ than the root.',
+            'In a binary search tree, values smaller than a node are stored in the ______ subtree.',
         marks: 1,
-        sourceRef: 'Sample Lecture Notes: Trees',
-        expectedKeywords: const ['less', 'less than', 'smaller'],
+        sourceRef: '',
+        expectedKeywords: const ['left'],
       ),
       FillBlankQuestionModel(
-        id: 'fb_queue_order',
+        id: 'fb_queue_policy',
         courseCode: courseCode,
         topic: resolvedTopic,
-        prompt: 'A queue follows the ______ principle.',
+        prompt:
+            'A queue removes items according to the ______ order of arrival.',
         marks: 1,
-        sourceRef: 'Sample Lecture Notes: Linear Structures',
-        expectedKeywords: const [
-          'fifo',
-          'first in first out',
-          'first-in first-out',
-        ],
+        sourceRef: '',
+        expectedKeywords: const ['first in first out', 'fifo'],
       ),
       FillBlankQuestionModel(
         id: 'fb_bfs_structure',
         courseCode: courseCode,
         topic: resolvedTopic,
-        prompt: 'Breadth-first search commonly uses a ______ to track nodes.',
+        prompt:
+            'Breadth-first search uses a ______ to keep track of vertices waiting to be visited.',
         marks: 1,
-        sourceRef: 'Sample Lecture Notes: Graphs',
+        sourceRef: '',
         expectedKeywords: const ['queue'],
       ),
       FillBlankQuestionModel(
-        id: 'fb_encapsulation',
+        id: 'fb_complexity_pairwise',
         courseCode: courseCode,
         topic: resolvedTopic,
         prompt:
-            'Encapsulation hides implementation details behind a public ______.',
+            'An algorithm that compares every pair of items normally has ______ time complexity.',
         marks: 1,
-        sourceRef: 'Sample Lecture Notes: OOP',
-        expectedKeywords: const ['interface', 'api'],
+        sourceRef: '',
+        expectedKeywords: const ['o(n^2)', 'o(n²)', 'quadratic'],
+      ),
+      FillBlankQuestionModel(
+        id: 'fb_heap_priority',
+        courseCode: courseCode,
+        topic: resolvedTopic,
+        prompt:
+            'A priority queue is commonly implemented using a binary ______.',
+        marks: 1,
+        sourceRef: '',
+        expectedKeywords: const ['heap'],
       ),
     ];
 
@@ -76,19 +84,22 @@ class SampleExamService {
     required String topic,
   }) {
     return TheoryQuestionModel(
-      id: 'essay_sample_1',
+      id: 'essay_data_structures_1',
       courseCode: courseCode,
       topic: _topic(topic),
       question:
-          'Explain how a distance learning student platform should support assessment integrity, offline access, and feedback after submission.',
+          'A university result-processing system must store student records, search by matric number, process requests in order of arrival, and generate ranked merit lists. Recommend suitable data structures for these requirements and justify your choices.',
       marks: 10,
-      sourceRef: 'Sample Exam Pack: Distance Learning Assessment',
+      sourceRef: '',
       expectedKeywords: const [
-        'assessment integrity',
-        'offline access',
-        'feedback',
-        'submission',
-        'synchronization',
+        'hash table',
+        'binary search tree',
+        'queue',
+        'priority queue',
+        'time complexity',
+        'search',
+        'insertion',
+        'ordering',
       ],
     );
   }
@@ -96,7 +107,7 @@ class SampleExamService {
   static List<MultiFormatQuestion> multiFormatQuestions({
     required String courseCode,
     required String topic,
-    List<MultiFormatQuestionType> formats = MultiFormatQuestionType.values,
+    List<MultiFormatQuestionType> formats = MultiFormatSampleExamService.importedFormats,
   }) {
     return MultiFormatSampleExamService.questions(
       courseCode: courseCode,
