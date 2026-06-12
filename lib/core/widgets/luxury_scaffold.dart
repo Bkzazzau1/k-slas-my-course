@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+
+import 'assessment_calculator.dart';
 
 class LuxuryScaffold extends StatelessWidget {
   const LuxuryScaffold({
@@ -13,6 +16,11 @@ class LuxuryScaffold extends StatelessWidget {
   final bool safeArea;
   final EdgeInsets? padding;
   final double maxContentWidth;
+
+  bool get showCalc {
+    final route = Get.currentRoute.toLowerCase();
+    return route.contains('exam/run') || route.contains('theory');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +47,6 @@ class LuxuryScaffold extends StatelessWidget {
               builder: (context, constraints) {
                 final content = safeArea ? SafeArea(child: body) : body;
                 if (constraints.maxWidth <= maxContentWidth) return content;
-
                 return Center(
                   child: SizedBox(
                     width: maxContentWidth,
@@ -50,6 +57,12 @@ class LuxuryScaffold extends StatelessWidget {
               },
             ),
           ),
+          if (showCalc)
+            const Positioned(
+              right: 18,
+              bottom: 18,
+              child: AssessmentCalculatorButton(compact: true),
+            ),
         ],
       ),
     );
