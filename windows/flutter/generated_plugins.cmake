@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  camera_windows
   connectivity_plus
   flutter_webrtc
   livekit_client
