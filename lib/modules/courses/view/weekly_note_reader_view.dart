@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/services/weekly_note_personal_storage.dart';
+import '../widgets/academic_revision_recommendation_panel.dart';
 
 class WeeklyNoteReaderView extends StatefulWidget {
   const WeeklyNoteReaderView({
@@ -75,6 +76,20 @@ class _WeeklyNoteReaderViewState extends State<WeeklyNoteReaderView> {
     await _reload();
   }
 
+  Future<void> _toggleRevisionFocus() async {
+    await WeeklyNotePersonalStorage.setRevisionMarked(
+      courseCode: widget.courseCode,
+      week: widget.week,
+      marked: !personal.revisionMarked,
+    );
+    await _reload();
+    Get.snackbar(
+      personal.revisionMarked ? 'Revision focus added' : 'Revision focus removed',
+      personal.revisionMarked ? 'This note is now part of your academic revision list.' : 'This note has been removed from revision focus.',
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
   Future<void> _reload() async {
     setState(() {
       personal = WeeklyNotePersonalStorage.load(courseCode: widget.courseCode, week: widget.week);
@@ -103,6 +118,7 @@ class _WeeklyNoteReaderViewState extends State<WeeklyNoteReaderView> {
                   offlineReady: widget.offlineReady,
                   highlightCount: personal.highlights.length,
                   hasPersonalNote: personal.noteText.trim().isNotEmpty,
+                  revisionMarked: personal.revisionMarked,
                 ),
               ),
             ),
@@ -111,6 +127,8 @@ class _WeeklyNoteReaderViewState extends State<WeeklyNoteReaderView> {
               sliver: SliverToBoxAdapter(
                 child: _ActionStrip(
                   offlineReady: widget.offlineReady,
+                  revisionMarked: personal.revisionMarked,
+                  onRevision: _toggleRevisionFocus,
                   onSave: () => Get.snackbar(
                     'Offline saved',
                     'Week ${widget.week} note is ready for offline reading.',
@@ -130,6 +148,17 @@ class _WeeklyNoteReaderViewState extends State<WeeklyNoteReaderView> {
                   onSaveNote: _savePersonalNote,
                   onAddHighlight: _addHighlight,
                   onRemoveHighlight: _removeHighlight,
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              sliver: SliverToBoxAdapter(
+                child: AcademicRevisionRecommendationPanel(
+                  title: widget.title,
+                  noteText: personal.noteText,
+                  highlights: personal.highlights,
+                  revisionMarked: personal.revisionMarked,
                 ),
               ),
             ),
@@ -198,6 +227,7 @@ class _ReaderHero extends StatelessWidget {
     required this.offlineReady,
     required this.highlightCount,
     required this.hasPersonalNote,
+    required this.revisionMarked,
   });
 
   final String courseCode;
@@ -207,6 +237,7 @@ class _ReaderHero extends StatelessWidget {
   final bool offlineReady;
   final int highlightCount;
   final bool hasPersonalNote;
+  final bool revisionMarked;
 
   @override
   Widget build(BuildContext context) {
@@ -233,7 +264,7 @@ class _ReaderHero extends StatelessWidget {
         Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 23, height: 1.12)),
         const SizedBox(height: 10),
         Text(
-          'Weekly lecturer note with objectives, explanations, personal notes, highlights, and assessment focus.',
+          'Weekly lecturer note with objectives, explanations, personal notes, highlights, and revision recommendation.',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700, height: 1.30),
         ),
         const SizedBox(height: 12),
@@ -242,6 +273,7 @@ class _ReaderHero extends StatelessWidget {
           _HeroPill(label: offlineReady ? 'Offline ready' : 'Online only'),
           _HeroPill(label: hasPersonalNote ? 'Personal note saved' : 'No personal note'),
           _HeroPill(label: '$highlightCount highlights'),
+          _HeroPill(label: revisionMarked ? 'Revision focus' : 'Not marked'),
         ]),
       ]),
     );
@@ -311,7 +343,7 @@ class _PersonalNotePanel extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         if (highlights.isEmpty)
-          Text('No highlight yet. Add key definitions, formulas, or exam focus points.', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.65), fontWeight: FontWeight.w600))
+          Text('No highlight yet. Add key definitions, formulas, or important lecturer points.', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.65), fontWeight: FontWeight.w600))
         else
           Wrap(
             spacing: 8,
@@ -351,9 +383,11 @@ class _HeroPill extends StatelessWidget {
 }
 
 class _ActionStrip extends StatelessWidget {
-  const _ActionStrip({required this.offlineReady, required this.onSave});
+  const _ActionStrip({required this.offlineReady, required this.revisionMarked, required this.onSave, required this.onRevision});
   final bool offlineReady;
+  final bool revisionMarked;
   final VoidCallback onSave;
+  final VoidCallback onRevision;
 
   @override
   Widget build(BuildContext context) {
@@ -363,9 +397,9 @@ class _ActionStrip extends StatelessWidget {
       const SizedBox(width: 10),
       Expanded(
         child: OutlinedButton.icon(
-          onPressed: () => Get.snackbar('Revision marked', 'This note has been added to your revision focus.', snackPosition: SnackPosition.BOTTOM),
-          icon: const Icon(Icons.bookmark_add_outlined),
-          label: const Text('Mark revision'),
+          onPressed: onRevision,
+          icon: Icon(revisionMarked ? Icons.bookmark_added_rounded : Icons.bookmark_add_outlined),
+          label: Text(revisionMarked ? 'Revision marked' : 'Mark revision'),
           style: OutlinedButton.styleFrom(foregroundColor: cs.primary),
         ),
       ),
