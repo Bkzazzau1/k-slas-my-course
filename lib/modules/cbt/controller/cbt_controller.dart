@@ -14,37 +14,33 @@ import '../../revision/controller/revision_controller.dart';
 class CBTController extends GetxController {
   final _uuid = const Uuid();
 
-  // session config
   late String courseCode;
-  String mode = "Timed"; // Timed, Untimed, CBT style
-  String topic = "Mixed";
-  String sessionType = "ASSESSMENT";
-  String gradingType = "UNGRADED";
+  String mode = 'Timed';
+  String topic = 'Mixed';
+  String sessionType = 'ASSESSMENT';
+  String gradingType = 'UNGRADED';
   String questionSource = QuestionSourceType.studentLocal;
-  ExamDeliveryMode deliveryMode = ExamDeliveryMode.remoteProctored;
+  ExamDeliveryMode deliveryMode = ExamDeliveryMode.centerBased;
   bool whiteboardEnabled = false;
   bool whiteboardRequired = false;
   String? whiteboardPrompt;
   int whiteboardStrokeCount = 0;
   bool shuffleQuestions = true;
-  bool lockCopyPaste = true;
+  bool lockCopyPaste = false;
   bool calculatorEnabled = false;
   int totalQuestions = 20;
   int durationMinutes = 12;
 
-  // session state
   final questions = <CBTQuestionModel>[].obs;
   final index = 0.obs;
-
   final selectedIndex = RxnInt();
-  final answers = <String, int>{}.obs; // questionId -> selectedOptionIndex
+  final answers = <String, int>{}.obs;
   final correctCount = 0.obs;
-
   final secondsLeft = 0.obs;
   final isPaused = false.obs;
+
   Timer? _timer;
   bool _isSubmitting = false;
-
   DateTime? _startedAt;
 
   void start({
@@ -53,16 +49,16 @@ class CBTController extends GetxController {
     required String sessionTopic,
     required int sessionQuestions,
     required int sessionMinutes,
-    String sessionKind = "ASSESSMENT",
-    String sessionGradingType = "UNGRADED",
+    String sessionKind = 'ASSESSMENT',
+    String sessionGradingType = 'UNGRADED',
     String sessionQuestionSource = QuestionSourceType.studentLocal,
-    ExamDeliveryMode sessionDeliveryMode = ExamDeliveryMode.remoteProctored,
+    ExamDeliveryMode sessionDeliveryMode = ExamDeliveryMode.centerBased,
     bool sessionWhiteboardEnabled = false,
     bool sessionWhiteboardRequired = false,
     String? sessionWhiteboardPrompt,
     int sessionWhiteboardStrokeCount = 0,
     bool sessionShuffleQuestions = true,
-    bool sessionLockCopyPaste = true,
+    bool sessionLockCopyPaste = false,
     bool sessionCalculatorEnabled = false,
   }) {
     courseCode = course;
@@ -88,8 +84,8 @@ class CBTController extends GetxController {
           )
         : null;
 
-    mode = shouldLockToBackend ? "Timed" : sessionMode;
-    topic = shouldLockToBackend ? "Mixed" : sessionTopic;
+    mode = shouldLockToBackend ? 'Timed' : sessionMode;
+    topic = shouldLockToBackend ? 'Mixed' : sessionTopic;
     deliveryMode = backendTemplate?.deliveryMode ?? sessionDeliveryMode;
     totalQuestions = backendTemplate != null && backendTemplate.hasObjective
         ? backendTemplate.objectiveQuestions
@@ -104,34 +100,28 @@ class CBTController extends GetxController {
     selectedIndex.value = null;
     isPaused.value = false;
 
-    // load questions
     final pool = CBTQuestionService.loadQuestions(
       courseCode: courseCode,
       topic: topic,
     );
-    // MVP: repeat if less than needed
     final list = <CBTQuestionModel>[];
     while (list.length < totalQuestions) {
       list.addAll(pool);
       if (pool.isEmpty) break;
     }
     final selected = list.take(totalQuestions).toList();
-    if (shuffleQuestions) {
-      selected.shuffle(Random());
-    }
+    if (shuffleQuestions) selected.shuffle(Random());
     questions.assignAll(selected);
 
-    // If no questions, stop and leave timer off to avoid crashes
     if (questions.isEmpty) {
       _timer?.cancel();
       secondsLeft.value = 0;
       return;
     }
 
-    // timer for timed/cbt
     _timer?.cancel();
     secondsLeft.value = durationMinutes * 60;
-    if (mode != "Untimed") {
+    if (mode != 'Untimed') {
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (_isSubmitting || isPaused.value) return;
         secondsLeft.value--;
@@ -143,12 +133,12 @@ class CBTController extends GetxController {
   }
 
   void pauseTimer() {
-    if (mode == "Untimed") return;
+    if (mode == 'Untimed') return;
     isPaused.value = true;
   }
 
   void resumeTimer() {
-    if (mode == "Untimed") return;
+    if (mode == 'Untimed') return;
     isPaused.value = false;
   }
 
@@ -185,45 +175,37 @@ class CBTController extends GetxController {
       isPaused.value = false;
 
       int correct = 0;
-
-      // topic -> {"total": x, "correct": y, "wrong": z, "scorePct": p}
       final Map<String, Map<String, int>> stats = {};
 
       void ensure(String topic) {
-        final t = topic.trim().isEmpty ? "Unknown Topic" : topic.trim();
+        final t = topic.trim().isEmpty ? 'Unknown Topic' : topic.trim();
         stats.putIfAbsent(
           t,
-          () => {"total": 0, "correct": 0, "wrong": 0, "scorePct": 0},
+          () => {'total': 0, 'correct': 0, 'wrong': 0, 'scorePct': 0},
         );
       }
 
       for (final q in questions) {
-        final t = q.topic.trim().isEmpty ? "Unknown Topic" : q.topic.trim();
+        final t = q.topic.trim().isEmpty ? 'Unknown Topic' : q.topic.trim();
         ensure(t);
-
-        stats[t]!["total"] = (stats[t]!["total"] ?? 0) + 1;
-
+        stats[t]!['total'] = (stats[t]!['total'] ?? 0) + 1;
         final a = answers[q.id];
         final isCorrect = a != null && a == q.correctIndex;
-
         if (isCorrect) {
           correct++;
-          stats[t]!["correct"] = (stats[t]!["correct"] ?? 0) + 1;
+          stats[t]!['correct'] = (stats[t]!['correct'] ?? 0) + 1;
         } else {
-          stats[t]!["wrong"] = (stats[t]!["wrong"] ?? 0) + 1;
+          stats[t]!['wrong'] = (stats[t]!['wrong'] ?? 0) + 1;
         }
       }
 
-      // compute scorePct per topic
       stats.forEach((t, m) {
-        final total = m["total"] ?? 0;
-        final c = m["correct"] ?? 0;
-        final pct = total == 0 ? 0 : ((c / total) * 100).round();
-        m["scorePct"] = pct;
+        final total = m['total'] ?? 0;
+        final c = m['correct'] ?? 0;
+        m['scorePct'] = total == 0 ? 0 : ((c / total) * 100).round();
       });
 
       correctCount.value = correct;
-
       final endedAt = DateTime.now();
       final startedAt = _startedAt ?? endedAt;
 
