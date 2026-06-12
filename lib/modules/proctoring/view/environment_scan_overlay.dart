@@ -17,6 +17,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   bool cameraReady = false;
   bool cameraFailed = false;
   bool startingExam = false;
+  bool returningDashboard = false;
   String statusText = 'Opening camera for live room verification...';
   String? failureText;
 
@@ -112,10 +113,20 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   }
 
   Future<void> _returnToDashboard() async {
+    if (returningDashboard) return;
+    setState(() => returningDashboard = true);
     await _disposeCamera();
+
+    // Do not let stopSession pop the overlay after navigating. That was removing
+    // the new main route on Windows and made the desktop shell close.
+    await proctoring.stopSession(silent: true, closeOverlay: false);
+
+    if (Get.isDialogOpen ?? false) {
+      Get.back<void>();
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+    }
+
     Get.offAllNamed('/main');
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    await proctoring.stopSession(silent: true);
   }
 
   Future<void> _disposeCamera() async {
@@ -243,15 +254,15 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                   else ...[
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton.icon(onPressed: _retryScan, icon: const Icon(Icons.refresh_rounded), label: const Text('Try scan again')),
+                      child: FilledButton.icon(onPressed: returningDashboard ? null : _retryScan, icon: const Icon(Icons.refresh_rounded), label: const Text('Try scan again')),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: _returnToDashboard,
+                        onPressed: returningDashboard ? null : _returnToDashboard,
                         icon: const Icon(Icons.dashboard_rounded),
-                        label: const Text('Return to dashboard / change environment'),
+                        label: Text(returningDashboard ? 'Returning...' : 'Return to dashboard / change environment'),
                         style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: BorderSide(color: Colors.white.withValues(alpha: 0.35))),
                       ),
                     ),
@@ -287,7 +298,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
         const SizedBox(height: 12),
         Text(statusText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
-        OutlinedButton.icon(onPressed: _returnToDashboard, style: OutlinedButton.styleFrom(foregroundColor: Colors.white), icon: const Icon(Icons.dashboard_rounded), label: const Text('Return to dashboard')),
+        OutlinedButton.icon(onPressed: returningDashboard ? null : _returnToDashboard, style: OutlinedButton.styleFrom(foregroundColor: Colors.white), icon: const Icon(Icons.dashboard_rounded), label: Text(returningDashboard ? 'Returning...' : 'Return to dashboard')),
       ]),
     );
   }
