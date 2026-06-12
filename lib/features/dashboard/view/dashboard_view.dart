@@ -37,19 +37,11 @@ class DashboardView extends GetView<DashboardController> {
                   slivers: [
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                      sliver: SliverToBoxAdapter(
-                        child: DashboardTopBar(cs: cs, isTablet: isTablet),
-                      ),
+                      sliver: SliverToBoxAdapter(child: DashboardTopBar(cs: cs, isTablet: isTablet)),
                     ),
                     SliverPadding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      sliver: SliverToBoxAdapter(
-                        child: _PriorityHero(
-                          draftCount: drafts.length,
-                          pendingCount: pending.length,
-                          latest: latest,
-                        ),
-                      ),
+                      sliver: SliverToBoxAdapter(child: _PriorityHero(draftCount: drafts.length, pendingCount: pending.length, latest: latest)),
                     ),
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -97,16 +89,14 @@ class DashboardView extends GetView<DashboardController> {
                             _DashAction('Practice CBT', Icons.quiz_outlined, Routes.cbtSetup),
                             _DashAction('Examination', Icons.verified_user_outlined, Routes.examSetup),
                             _DashAction('Receipts & offline', Icons.receipt_long_outlined, Routes.results),
-                            _DashAction('Weak areas', Icons.psychology_outlined, Routes.weakAreas),
+                            _DashAction('Revision focus', Icons.psychology_outlined, Routes.revision),
                           ],
                         ),
                       ),
                     ),
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-                      sliver: SliverToBoxAdapter(
-                        child: _LatestReceiptCard(latest: latest),
-                      ),
+                      sliver: SliverToBoxAdapter(child: _LatestReceiptCard(latest: latest)),
                     ),
                   ],
                 ),
@@ -141,37 +131,19 @@ class _PriorityHero extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-            color: cs.primary.withValues(alpha: 0.16),
-          ),
-        ],
+        boxShadow: [BoxShadow(blurRadius: 24, offset: const Offset(0, 14), color: cs.primary.withValues(alpha: 0.16))],
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundColor: Colors.white.withValues(alpha: 0.18),
-            child: Icon(hasAction ? Icons.priority_high_rounded : Icons.verified_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
-              const SizedBox(height: 5),
-              Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700)),
-            ]),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            onPressed: () => Get.toNamed(Routes.results),
-            icon: const Icon(Icons.receipt_long_rounded),
-            label: const Text('Open'),
-          ),
-        ],
-      ),
+      child: Row(children: [
+        CircleAvatar(radius: 28, backgroundColor: Colors.white.withValues(alpha: 0.18), child: Icon(hasAction ? Icons.priority_high_rounded : Icons.verified_rounded, color: Colors.white)),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+          const SizedBox(height: 5),
+          Text(subtitle, style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700)),
+        ])),
+        const SizedBox(width: 8),
+        FilledButton.tonalIcon(onPressed: () => Get.toNamed(Routes.results), icon: const Icon(Icons.receipt_long_rounded), label: const Text('Open')),
+      ]),
     );
   }
 }
@@ -186,11 +158,7 @@ class _ActionPanel extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-      ),
+      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(22), border: Border.all(color: cs.onSurface.withValues(alpha: 0.06))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
         const SizedBox(height: 12),
@@ -200,12 +168,7 @@ class _ActionPanel extends StatelessWidget {
           return Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: actions
-                .map((action) => SizedBox(
-                      width: itemWidth,
-                      child: _ActionTile(action: action),
-                    ))
-                .toList(),
+            children: actions.map((action) => SizedBox(width: itemWidth, child: _ActionTile(action: action))).toList(),
           );
         }),
       ]),
@@ -225,11 +188,7 @@ class _ActionTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: cs.primary.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.primary.withValues(alpha: 0.10)),
-        ),
+        decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(18), border: Border.all(color: cs.primary.withValues(alpha: 0.10))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Icon(action.icon, color: cs.primary),
           const SizedBox(height: 10),
@@ -254,10 +213,7 @@ class _LatestReceiptCard extends StatelessWidget {
       trailingText: 'History',
       onTrailingTap: () => Get.toNamed(Routes.results),
       child: latest == null
-          ? Text(
-              'No submitted assessment yet. Your receipts will appear here after submission.',
-              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.72), fontWeight: FontWeight.w700),
-            )
+          ? Text('No submitted assessment yet. Your receipts will appear here after submission.', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.72), fontWeight: FontWeight.w700))
           : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Expanded(child: Text(latest!.courseCode, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900))),
