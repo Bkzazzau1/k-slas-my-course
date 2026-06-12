@@ -102,8 +102,6 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
       _cameraController = controller;
       await controller.initialize();
 
-      // The live preview is the hard requirement. Frame streaming is a bonus
-      // used for local AI checks where the platform camera plugin supports it.
       await _proctoring.registerEnvironmentFrameAnalysis(
         objectLabels: const <String>[],
         lightingScore: 1.0,
@@ -238,6 +236,19 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
       // Keep scan running even when one frame cannot be analysed.
     } finally {
       _isProcessingFrame = false;
+    }
+  }
+
+  Future<void> _completeScanAndContinue() async {
+    await _proctoring.completeEnvironmentScan();
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    if (!mounted) return;
+    if (_proctoring.examStartupScanCompleted.value &&
+        !_proctoring.scanRequired.value) {
+      await _disposeCameraController();
+      if (Get.isDialogOpen ?? false) {
+        Get.back<void>();
+      }
     }
   }
 
@@ -392,7 +403,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay>
                           width: double.infinity,
                           child: FilledButton(
                             onPressed: canComplete
-                                ? () => _proctoring.completeEnvironmentScan()
+                                ? _completeScanAndContinue
                                 : null,
                             style: FilledButton.styleFrom(
                               backgroundColor: cs.primary,
