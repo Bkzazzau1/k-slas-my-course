@@ -3,27 +3,34 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../app/routes/app_routes.dart';
+import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/exam_models.dart';
-import '../../../data/models/theory_rewrite_models.dart';
-import '../../../data/services/exam_insights_service.dart';
-import '../../revision/controller/revision_controller.dart';
+import '../../proctoring/controller/proctoring_controller.dart';
 
 class ExamResultView extends StatelessWidget {
   const ExamResultView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     final res = Get.arguments as ExamResult;
+    final cs = Theme.of(context).colorScheme;
     final isAssessment = res.sessionType == SessionType.assessment;
-    final sessionLabel = isAssessment ? "assessment" : "examination";
-    final gradingLabel = res.gradingType == GradingType.graded
-        ? "graded"
-        : "ungraded";
-    final insights = ExamInsightsService.analyze(res);
+    final sessionLabel = isAssessment ? 'Assessment' : 'Examination';
+    final receipt = 'KSLAS-${res.endedAt.millisecondsSinceEpoch.toString().substring(5)}';
+    final duration = res.endedAt.difference(res.startedAt);
+    final proctoring = Get.isRegistered<ProctoringController>()
+        ? Get.find<ProctoringController>()
+        : null;
+    final isProctored = res.deliveryMode == ExamDeliveryMode.remoteProctored;
+    final integrityScore = proctoring?.integrityScore.value;
+    final warningCount = proctoring?.violationCount.value ?? 0;
+    final clean = !isProctored || (warningCount == 0 && (integrityScore ?? 100) >= 80);
+    final status = clean
+        ? 'Submitted Successfully'
+        : warningCount > 0
+            ? 'Submitted - Under Review'
+            : 'Submitted - Warning';
 
     return Scaffold(
       body: LuxuryScaffold(
@@ -32,304 +39,103 @@ class ExamResultView extends StatelessWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: _ResultHero(res: res),
+              child: _Hero(
+                courseCode: res.courseCode,
+                sessionLabel: sessionLabel,
+                status: status,
+                score: res.pct,
+                clean: clean,
+              ),
             ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [
-                  _GlassCard(
-                    title: "What this means",
-                    icon: Icons.insights_outlined,
+                  _Card(
+                    title: 'Submission receipt',
+                    icon: Icons.receipt_long_rounded,
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        ...insights.suggestions.map(
-                          (s) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "-  ",
-                                  style: TextStyle(
-                                    color: cs.primary,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                Expanded(child: Text(s)),
-                              ],
-                            ),
-                          ),
-                        ),
+                        _row('Receipt number', receipt),
+                        _row('Course', res.courseCode),
+                        _row('Type', sessionLabel),
+                        _row('Mode', res.gradingType == GradingType.graded ? 'Graded' : 'Ungraded'),
+                        _row('Submitted', _formatDate(res.endedAt)),
+                        _row('Time used', '${duration.inMinutes} min ${duration.inSeconds.remainder(60)} sec'),
+                        _row('Status', status),
                       ],
                     ),
                   ),
-
-                  if (insights.missingKeywords.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _GlassCard(
-                      title: "Missing theory keywords",
-                      icon: Icons.key_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: insights.missingKeywords.take(24).map((
-                              k,
-                            ) {
-                              return ActionChip(
-                                label: Text(k),
-                                onPressed: () {
-                                  Get.toNamed(
-                                    Routes.theoryRewrite,
-                                    arguments: TheoryRewritePrompt(
-                                      courseCode: res.courseCode,
-                                      topic: "Theory keywords",
-                                      question:
-                                          "Rewrite your answer using the lecturer keywords below. Keep definition + properties + example.",
-                                      sourceRef:
-                                          "Lecturer Notes (from exam citations)",
-                                      requiredKeywords:
-                                          insights.missingKeywords,
-                                      originalAnswer: null,
-                                      originalScore: null,
-                                      originalTotal: 10,
-                                    ),
-                                  );
-                                },
-                              );
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: cs.secondary.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Text(
-                              "Why keywords matter: lecturers award marks when they see the exact terms taught in class. "
-                              "Even correct ideas can lose marks without those terms.",
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  if (insights.fillBlankMistakes.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _GlassCard(
-                      title: "Fill-blank mistakes",
-                      icon: Icons.rule_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ...insights.fillBlankMistakes.take(6).map((m) {
-                            final prompt = m["prompt"]?.toString() ?? "";
-                            final student = m["student"]?.toString() ?? "";
-                            final expected =
-                                (m["expected"] as List?)?.join(", ") ?? "";
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: cs.onSurface.withValues(alpha: 0.03),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(
-                                  color: cs.onSurface.withValues(alpha: 0.06),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    prompt,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text("Your answer: $student"),
-                                  const SizedBox(height: 2),
-                                  Text("Accepted (from notes): $expected"),
-                                ],
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  if (res.whiteboardEnabled) ...[
-                    const SizedBox(height: 12),
-                    _GlassCard(
-                      title: "Whiteboard diagram",
-                      icon: Icons.draw_outlined,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            res.whiteboardRequired
-                                ? "Diagram was required for this session."
-                                : "Diagram was optional for this session.",
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            res.whiteboardSubmitted
-                                ? "Submitted (${res.whiteboardStrokeCount} stroke(s))."
-                                : "No whiteboard diagram submitted.",
-                            style: TextStyle(
-                              color: res.whiteboardSubmitted
-                                  ? cs.primary
-                                  : cs.error,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          if (res.whiteboardPrompt != null &&
-                              res.whiteboardPrompt!.trim().isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              res.whiteboardPrompt!.trim(),
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.7),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-
                   const SizedBox(height: 12),
-                  _GlassCard(
-                    title: "Section scores",
+                  _Card(
+                    title: 'Score summary',
+                    icon: Icons.analytics_outlined,
+                    child: Column(
+                      children: [
+                        _row('Total score', '${res.scoredMarks}/${res.totalMarks}'),
+                        _row('Percentage', '${res.pct}%'),
+                        _row('Sections submitted', '${res.sectionScores.length}'),
+                        if (res.whiteboardEnabled)
+                          _row('Whiteboard', res.whiteboardSubmitted ? 'Submitted' : 'Not submitted'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _Card(
+                    title: 'Student proctoring summary',
+                    icon: Icons.security_rounded,
+                    child: isProctored
+                        ? Column(
+                            children: [
+                              _check('Camera and room scan', proctoring?.examStartupScanCompleted.value == true),
+                              _check('Room rotation', proctoring?.scanRotationConfirmed.value == true),
+                              _check('Lighting check', (proctoring?.scanLightingScore.value ?? 0) >= (proctoring?.minimumScanLightingScore ?? 1)),
+                              _check('Integrity score', (integrityScore ?? 0) >= 70, detail: integrityScore == null ? 'Not available' : '$integrityScore'),
+                              _check('Warnings', warningCount == 0, detail: '$warningCount'),
+                            ],
+                          )
+                        : const Text(
+                            'This was a normal session. Camera and microphone proctoring were not active.',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  _Card(
+                    title: 'Section scores',
                     icon: Icons.list_alt_outlined,
                     child: Column(
                       children: res.sectionScores
-                          .map(
-                            (s) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: cs.onSurface.withValues(alpha: 0.03),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: cs.onSurface.withValues(alpha: 0.06),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: cs.primary.withValues(
-                                          alpha: 0.12,
-                                        ),
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: cs.primary.withValues(
-                                            alpha: 0.18,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Icon(
-                                        Icons.checklist_outlined,
-                                        color: cs.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _label(s.sectionType),
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            "${s.scoredMarks}/${s.totalMarks}",
-                                            style: TextStyle(
-                                              color: cs.onSurface.withValues(
-                                                alpha: 0.7,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
+                          .map((s) => _sectionRow(context, _label(s.sectionType), '${s.scoredMarks}/${s.totalMarks}'))
                           .toList(),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
-                  _PrimaryCta(
-                    label: "Generate Tomorrow Plan",
-                    onTap: () {
-                      Get.find<RevisionPlanController>().applyExamResult(res);
-                      Get.offAllNamed('/dashboard');
-                    },
-                    subText:
-                        "We'll focus tomorrow on your weakest topics and missed keywords.",
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: () => Get.offAllNamed('/dashboard'),
+                      icon: const Icon(Icons.dashboard_rounded),
+                      label: const Text('Return to dashboard'),
+                    ),
                   ),
-
                   const SizedBox(height: 10),
-
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
                       onPressed: () {
                         if (isAssessment) {
-                          Get.offAllNamed(
-                            Routes.cbtSetup,
-                            arguments: {"courseCode": res.courseCode},
-                          );
+                          Get.offAllNamed(Routes.cbtSetup, arguments: {'courseCode': res.courseCode});
                           return;
                         }
                         Get.offAllNamed(Routes.examSetup);
                       },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Text(
-                        "Take another $sessionLabel",
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
+                      child: Text('Take another ${sessionLabel.toLowerCase()}'),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Text(
-                    "This was a $gradingLabel $sessionLabel.",
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.65),
-                      fontWeight: FontWeight.w600,
-                    ),
+                    'Keep this receipt number for your record. Final grading may depend on university release policy.',
+                    style: TextStyle(color: cs.onSurface.withValues(alpha: 0.66), fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -340,120 +146,113 @@ class ExamResultView extends StatelessWidget {
     );
   }
 
+  static String _formatDate(DateTime value) {
+    final y = value.year.toString().padLeft(4, '0');
+    final m = value.month.toString().padLeft(2, '0');
+    final d = value.day.toString().padLeft(2, '0');
+    final hh = value.hour.toString().padLeft(2, '0');
+    final mm = value.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
+  }
+
+  static Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
+          const SizedBox(width: 12),
+          Flexible(child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w900))),
+        ],
+      ),
+    );
+  }
+
+  static Widget _check(String label, bool ok, {String? detail}) {
+    final color = ok ? Colors.green : Colors.orange;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        children: [
+          Icon(ok ? Icons.check_circle_rounded : Icons.error_rounded, color: color, size: 19),
+          const SizedBox(width: 8),
+          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
+          if (detail != null) Text(detail, style: const TextStyle(fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+
+  static Widget _sectionRow(BuildContext context, String label, String value) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w900))),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+
   String _label(String s) {
-    if (s == ExamSectionType.objective) return "Objective (CBT)";
-    if (s == ExamSectionType.fillBlank) return "Fill in the blank";
-    return "Theory (Essay)";
+    if (s == ExamSectionType.objective) return 'Objective (CBT)';
+    if (s == ExamSectionType.fillBlank) return 'Fill in the blank';
+    return 'Theory (Essay)';
   }
 }
 
-class _ResultHero extends StatelessWidget {
-  const _ResultHero({required this.res});
-  final ExamResult res;
+class _Hero extends StatelessWidget {
+  const _Hero({required this.courseCode, required this.sessionLabel, required this.status, required this.score, required this.clean});
+  final String courseCode;
+  final String sessionLabel;
+  final String status;
+  final int score;
+  final bool clean;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cs.primary.withValues(alpha: 0.95),
-            cs.secondary.withValues(alpha: 0.80),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-            color: cs.primary.withValues(alpha: 0.18),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
       ),
       child: Row(
         children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-            ),
-            child: const Icon(Icons.assessment_outlined, color: Colors.white),
+          CircleAvatar(
+            radius: 27,
+            backgroundColor: Colors.white.withValues(alpha: 0.18),
+            child: Icon(clean ? Icons.verified_rounded : Icons.fact_check_rounded, color: Colors.white),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  res.courseCode,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  res.sessionType == SessionType.assessment
-                      ? "Assessment report"
-                      : "Examination report",
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.90),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "${res.pct}%",
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 34,
-                  ),
-                ),
-                Text(
-                  "${res.scoredMarks}/${res.totalMarks} marks",
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.90)),
-                ),
-              ],
-            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(courseCode, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
+              const SizedBox(height: 4),
+              Text('$sessionLabel submitted', style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(status, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
+            ]),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-            ),
-            child: const Text(
-              "Report",
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
+          Text('$score%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 30)),
         ],
       ),
     );
   }
 }
 
-class _GlassCard extends StatelessWidget {
-  const _GlassCard({
-    required this.title,
-    required this.icon,
-    required this.child,
-  });
-
+class _Card extends StatelessWidget {
+  const _Card({required this.title, required this.icon, required this.child});
   final String title;
   final IconData icon;
   final Widget child;
@@ -461,109 +260,26 @@ class _GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: cs.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-                color: cs.onSurface.withValues(alpha: 0.04),
-              ),
-            ],
           ),
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: cs.primary.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(icon, color: cs.primary),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              child,
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PrimaryCta extends StatelessWidget {
-  const _PrimaryCta({
-    required this.label,
-    required this.onTap,
-    required this.subText,
-  });
-
-  final String label;
-  final VoidCallback onTap;
-  final String subText;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cs.onSurface.withValues(alpha: 0.03),
-          border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Column(
-          children: [
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: onTap,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: Text(
-                  label,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subText,
-              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.72)),
-            ),
-          ],
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(icon, color: cs.primary),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w900))),
+            ]),
+            const SizedBox(height: 12),
+            child,
+          ]),
         ),
       ),
     );
