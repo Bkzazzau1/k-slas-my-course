@@ -9,7 +9,6 @@ import '../../../core/whiteboard/whiteboard_models.dart';
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/cbt_models.dart';
 import '../../../data/models/exam_models.dart';
-import '../../../data/models/multi_format_exam_models.dart';
 import '../../../data/services/sample_exam_service.dart';
 import '../../proctoring/controller/proctoring_controller.dart';
 import '../controller/exam_controller.dart';
@@ -34,7 +33,6 @@ class _ExamRunViewState extends State<ExamRunView> {
     super.initState();
     cfg = Get.arguments as ExamConfig;
     ctrl = Get.find<ExamController>();
-
     proctoring = Get.isRegistered<ProctoringController>()
         ? Get.find<ProctoringController>()
         : Get.put(ProctoringController(), permanent: true);
@@ -42,31 +40,23 @@ class _ExamRunViewState extends State<ExamRunView> {
     if (_useProctoring) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _ownsProctoringSession = true;
-
-        if (proctoring.hasActiveSessionFor(
-          AssessmentIntegrityLevel.highStakesExam,
-        )) {
-          proctoring.attachSessionCallbacks(
-            onSessionTerminated: _handleSessionTermination,
-          );
+        if (proctoring.hasActiveSessionFor(AssessmentIntegrityLevel.highStakesExam)) {
+          proctoring.attachSessionCallbacks(onSessionTerminated: _handleSessionTermination);
           if (proctoring.examStartupScanCompleted.value) {
             proctoring.armExamMonitoring();
           }
           return;
         }
-
+        _ownsProctoringSession = true;
         unawaited(
-          proctoring
-              .startSession(
-                level: AssessmentIntegrityLevel.highStakesExam,
-                onSessionTerminated: _handleSessionTermination,
-              )
-              .then((_) {
-                if (proctoring.examStartupScanCompleted.value) {
-                  proctoring.armExamMonitoring();
-                }
-              }),
+          proctoring.startSession(
+            level: AssessmentIntegrityLevel.highStakesExam,
+            onSessionTerminated: _handleSessionTermination,
+          ).then((_) {
+            if (proctoring.examStartupScanCompleted.value) {
+              proctoring.armExamMonitoring();
+            }
+          }),
         );
       });
     }
@@ -80,233 +70,93 @@ class _ExamRunViewState extends State<ExamRunView> {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+  List<String> get _sectionOrder => const [
+        ExamSectionType.objective,
+        ExamSectionType.fillBlank,
+        ExamSectionType.theory,
+      ];
 
-    return Scaffold(
-      body: LuxuryScaffold(
-        safeArea: true,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: _RunHero(
-                title: "${cfg.courseCode} - ${_sessionLabel(cfg.sessionType)}",
-                subtitle: _useProctoring
-                    ? "Remote proctored session: finish sections in order. Device checks are active."
-                    : "Distance self-practice session: device proctoring is off.",
-                onBack: () => Get.back(),
-              ),
-            ),
+  Set<String> get _doneSections => ctrl.sectionScores.map((e) => e.sectionType).toSet();
 
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                children: [
-                  if (_useProctoring)
-                    Obx(
-                      () => _IntegrityStrip(
-                        score: proctoring.integrityScore.value,
-                        moved: proctoring.isPhoneMoved.value,
-                        recording: proctoring.isScreenRecorded.value,
-                      ),
-                    )
-                  else
-                    _NonProctoredStrip(label: _sessionLabel(cfg.sessionType)),
-                  const SizedBox(height: 12),
-                  _InfoStrip(
-                    text:
-                        'Formats: ${_formatSummary()}. Security: ${_securitySummary()}.',
-                    icon: Icons.tune_outlined,
-                  ),
-                  if (cfg.whiteboardEnabled) ...[
-                    const SizedBox(height: 12),
-                    Obx(
-                      () => _WhiteboardStrip(
-                        required: cfg.whiteboardRequired,
-                        prompt: cfg.whiteboardPrompt,
-                        strokeCount: ctrl.whiteboardStrokes.length,
-                        onOpen: _openWhiteboard,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Obx(() {
-                    final done = ctrl.sectionScores
-                        .map((e) => e.sectionType)
-                        .toSet();
-
-                    return Column(
-                      children: [
-                        _SectionTile(
-                          title: "Objective (CBT)",
-                          enabled: cfg.sections.contains(
-                            ExamSectionType.objective,
-                          ),
-                          done: done.contains(ExamSectionType.objective),
-                        ),
-                        const SizedBox(height: 10),
-                        _SectionTile(
-                          title: "Fill in the blank",
-                          enabled: cfg.sections.contains(
-                            ExamSectionType.fillBlank,
-                          ),
-                          done: done.contains(ExamSectionType.fillBlank),
-                        ),
-                        const SizedBox(height: 10),
-                        _SectionTile(
-                          title: "Theory (Essay)",
-                          enabled: cfg.sections.contains(
-                            ExamSectionType.theory,
-                          ),
-                          done: done.contains(ExamSectionType.theory),
-                        ),
-                        const SizedBox(height: 12),
-
-                        _InfoStrip(
-                          text:
-                              "Tip: Even correct ideas can lose marks without lecturer keywords. Use the exact terms taught.",
-                          icon: Icons.verified_outlined,
-                        ),
-                      ],
-                    );
-                  }),
-
-                  const SizedBox(height: 16),
-
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: cs.onSurface.withValues(alpha: 0.03),
-                          border: Border.all(
-                            color: cs.onSurface.withValues(alpha: 0.06),
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: () async => _startNextSection(),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: const Text(
-                              "Continue",
-                              style: TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  String? get _nextSection {
+    for (final section in _sectionOrder) {
+      if (cfg.sections.contains(section) && !_doneSections.contains(section)) {
+        return section;
+      }
+    }
+    return null;
   }
 
+  bool get _hasAnySubmittedSection => ctrl.sectionScores.isNotEmpty;
+
   Future<void> _startNextSection() async {
-    final exam = ctrl;
-    final done = exam.sectionScores.map((e) => e.sectionType).toSet();
-
-    final order = [
-      ExamSectionType.objective,
-      ExamSectionType.fillBlank,
-      ExamSectionType.theory,
-    ];
-
-    String? next;
-    for (final s in order) {
-      if (cfg.sections.contains(s) && !done.contains(s)) {
-        next = s;
-        break;
-      }
-    }
-
-    if (next == null) {
-      if (cfg.requiresWhiteboard && !exam.hasWhiteboardSketch) {
-        Get.snackbar(
-          'Whiteboard required',
-          'This ${_sessionLabel(cfg.sessionType).toLowerCase()} requires a diagram on whiteboard.',
-          snackPosition: SnackPosition.BOTTOM,
-        );
-        return;
-      }
-      final res = exam.finalize();
-      Get.offNamed('/exam/result', arguments: res);
+    final section = _nextSection;
+    if (section == null) {
+      await _finishExam();
       return;
     }
+    await _startSection(section);
+  }
 
-    if (next == ExamSectionType.objective) {
+  Future<void> _startSection(String section) async {
+    if (!cfg.sections.contains(section)) return;
+    if (_doneSections.contains(section)) return;
+
+    if (section == ExamSectionType.objective) {
       final res = await Get.toNamed(
         '/cbt/take',
         arguments: {
-          "courseCode": cfg.courseCode,
-          "mode": cfg.mode == ExamMode.practice ? "Untimed" : "Timed",
-          "topic": cfg.topic == "WeakOnly" ? "Mixed" : cfg.topic,
-          "questions": cfg.objectiveQuestions,
-          "minutes": cfg.mode == ExamMode.practice
+          'courseCode': cfg.courseCode,
+          'mode': cfg.mode == ExamMode.practice ? 'Untimed' : 'Timed',
+          'topic': cfg.topic == 'WeakOnly' ? 'Mixed' : cfg.topic,
+          'questions': cfg.objectiveQuestions,
+          'minutes': cfg.mode == ExamMode.practice
               ? 20
               : (cfg.durationMinutes ~/ 2).clamp(10, 90),
-          "examMode": true,
-          "sessionType": cfg.sessionType,
-          "gradingType": cfg.gradingType,
-          "deliveryMode": cfg.deliveryMode.raw,
-          "questionSource": cfg.questionSource,
-          "whiteboardEnabled": cfg.whiteboardEnabled,
-          "whiteboardRequired": cfg.whiteboardRequired,
-          "whiteboardPrompt": cfg.whiteboardPrompt,
-          "enabledFormats": cfg.enabledFormats
-              .map((format) => format.raw)
-              .toList(),
-          "demoMode": cfg.securityPolicy.demoMode,
-          "shuffleQuestions": cfg.securityPolicy.shuffleQuestions,
-          "lockCopyPaste": cfg.securityPolicy.lockCopyPaste,
-          "calculatorEnabled": cfg.securityPolicy.calculatorEnabled,
+          'examMode': true,
+          'sessionType': cfg.sessionType,
+          'gradingType': cfg.gradingType,
+          'deliveryMode': cfg.deliveryMode.raw,
+          'questionSource': cfg.questionSource,
+          'whiteboardEnabled': cfg.whiteboardEnabled,
+          'whiteboardRequired': cfg.whiteboardRequired,
+          'whiteboardPrompt': cfg.whiteboardPrompt,
+          'enabledFormats': cfg.enabledFormats.map((format) => format.raw).toList(),
+          'demoMode': cfg.securityPolicy.demoMode,
+          'shuffleQuestions': cfg.securityPolicy.shuffleQuestions,
+          'lockCopyPaste': cfg.securityPolicy.lockCopyPaste,
+          'calculatorEnabled': cfg.securityPolicy.calculatorEnabled,
         },
       );
       if (res is CBTAttemptModel) {
-        exam.addSectionScore(
+        ctrl.addSectionScore(
           ExamSectionScore(
             sectionType: ExamSectionType.objective,
             totalMarks: res.totalQuestions,
             scoredMarks: res.correct,
-            extra: {"cbtAttemptId": res.id},
+            extra: {'cbtAttemptId': res.id},
           ),
         );
-        await _startNextSection();
       }
       return;
     }
 
-    if (next == ExamSectionType.fillBlank) {
+    if (section == ExamSectionType.fillBlank) {
       final out = await Get.toNamed('/fillblank/start', arguments: cfg);
-      if (out is Map && out["section"] == "FILL_BLANK") {
-        exam.addSectionScore(
+      if (out is Map && out['section'] == 'FILL_BLANK') {
+        ctrl.addSectionScore(
           ExamSectionScore(
             sectionType: ExamSectionType.fillBlank,
-            totalMarks: (out["totalMarks"] ?? 0) as int,
-            scoredMarks: (out["scoredMarks"] ?? 0) as int,
-            extra: (out["extra"] ?? {}) as Map<String, dynamic>,
+            totalMarks: (out['totalMarks'] ?? 0) as int,
+            scoredMarks: (out['scoredMarks'] ?? 0) as int,
+            extra: (out['extra'] ?? {}) as Map<String, dynamic>,
           ),
         );
-        await _startNextSection();
       }
       return;
     }
 
-    if (next == ExamSectionType.theory) {
+    if (section == ExamSectionType.theory) {
       final tq = SampleExamService.theoryQuestion(
         courseCode: cfg.courseCode,
         topic: cfg.topic,
@@ -314,63 +164,75 @@ class _ExamRunViewState extends State<ExamRunView> {
       final out = await Get.toNamed(
         '/theory/practice',
         arguments: {
-          "question": tq,
-          "examMode": true,
-          "sessionType": cfg.sessionType,
-          "gradingType": cfg.gradingType,
-          "deliveryMode": cfg.deliveryMode.raw,
-          "whiteboardEnabled": cfg.whiteboardEnabled,
-          "whiteboardRequired": cfg.whiteboardRequired,
-          "whiteboardPrompt": cfg.whiteboardPrompt,
-          "enabledFormats": cfg.enabledFormats
-              .map((format) => format.raw)
-              .toList(),
-          "demoMode": cfg.securityPolicy.demoMode,
-          "shuffleQuestions": cfg.securityPolicy.shuffleQuestions,
-          "lockCopyPaste": cfg.securityPolicy.lockCopyPaste,
-          "calculatorEnabled": cfg.securityPolicy.calculatorEnabled,
+          'question': tq,
+          'examMode': true,
+          'sessionType': cfg.sessionType,
+          'gradingType': cfg.gradingType,
+          'deliveryMode': cfg.deliveryMode.raw,
+          'whiteboardEnabled': cfg.whiteboardEnabled,
+          'whiteboardRequired': cfg.whiteboardRequired,
+          'whiteboardPrompt': cfg.whiteboardPrompt,
+          'enabledFormats': cfg.enabledFormats.map((format) => format.raw).toList(),
+          'demoMode': cfg.securityPolicy.demoMode,
+          'shuffleQuestions': cfg.securityPolicy.shuffleQuestions,
+          'lockCopyPaste': cfg.securityPolicy.lockCopyPaste,
+          'calculatorEnabled': cfg.securityPolicy.calculatorEnabled,
         },
       );
-      if (out is Map && out["section"] == "THEORY") {
-        exam.addSectionScore(
+      if (out is Map && out['section'] == 'THEORY') {
+        ctrl.addSectionScore(
           ExamSectionScore(
             sectionType: ExamSectionType.theory,
-            totalMarks: (out["totalMarks"] ?? 0) as int,
-            scoredMarks: (out["scoredMarks"] ?? 0) as int,
-            extra: (out["extra"] ?? {}) as Map<String, dynamic>,
+            totalMarks: (out['totalMarks'] ?? 0) as int,
+            scoredMarks: (out['scoredMarks'] ?? 0) as int,
+            extra: (out['extra'] ?? {}) as Map<String, dynamic>,
           ),
         );
-        await _startNextSection();
       }
+    }
+  }
+
+  Future<void> _finishExam() async {
+    if (cfg.requiresWhiteboard && !ctrl.hasWhiteboardSketch) {
+      Get.snackbar(
+        'Whiteboard required',
+        'This ${_sessionLabel(cfg.sessionType).toLowerCase()} requires a submitted diagram before final submission.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
       return;
     }
-  }
 
-  String _formatSummary() {
-    if (cfg.enabledFormats.isEmpty) {
-      return cfg.sections.join(', ');
-    }
-    return cfg.enabledFormats.map((format) => format.label).join(', ');
-  }
+    final pending = cfg.sections.where((s) => !_doneSections.contains(s)).toList();
+    final confirm = await Get.dialog<bool>(
+      AlertDialog(
+        title: Text(pending.isEmpty ? 'Submit ${_sessionLabel(cfg.sessionType)}?' : 'End and submit now?'),
+        content: Text(
+          pending.isEmpty
+              ? 'All enabled sections have been completed. Submit your ${_sessionLabel(cfg.sessionType).toLowerCase()} now?'
+              : 'You still have ${pending.length} section${pending.length == 1 ? '' : 's'} not completed. Submit only the completed work now?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text('Continue working'),
+          ),
+          FilledButton(
+            onPressed: _hasAnySubmittedSection ? () => Get.back(result: true) : null,
+            child: const Text('Submit now'),
+          ),
+        ],
+      ),
+    );
 
-  String _securitySummary() {
-    final policy = cfg.securityPolicy;
-    return [
-      policy.demoMode ? 'demo override' : 'strict verification',
-      policy.shuffleQuestions ? 'shuffle' : 'fixed order',
-      policy.lockCopyPaste ? 'paste locked' : 'paste allowed',
-      if (policy.calculatorEnabled) 'calculator',
-    ].join(', ');
+    if (confirm != true) return;
+    final result = ctrl.finalize();
+    Get.offNamed('/exam/result', arguments: result);
   }
 
   void _handleSessionTermination() {
     if (!mounted) return;
     final result = ctrl.finalize();
     Get.offNamed('/exam/result', arguments: result);
-  }
-
-  String _sessionLabel(String type) {
-    return type == SessionType.assessment ? "Assessment" : "Examination";
   }
 
   Future<void> _openWhiteboard() async {
@@ -386,92 +248,151 @@ class _ExamRunViewState extends State<ExamRunView> {
     if (strokes == null) return;
     ctrl.saveWhiteboardStrokes(strokes);
   }
-}
 
-class _IntegrityStrip extends StatelessWidget {
-  const _IntegrityStrip({
-    required this.score,
-    required this.moved,
-    required this.recording,
-  });
-
-  final int score;
-  final bool moved;
-  final bool recording;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final issues = <String>[if (moved) 'Movement', if (recording) 'Recording'];
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cs.onSurface.withValues(alpha: 0.03),
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.security, color: cs.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  issues.isEmpty
-                      ? 'Integrity score: $score'
-                      : 'Integrity score: $score • ${issues.join(", ")}',
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  String _sectionTitle(String section) {
+    switch (section) {
+      case ExamSectionType.objective:
+        return 'Objective / CBT';
+      case ExamSectionType.fillBlank:
+        return 'Fill in the blank';
+      case ExamSectionType.theory:
+        return 'Theory / Essay';
+      default:
+        return section;
+    }
   }
-}
 
-class _NonProctoredStrip extends StatelessWidget {
-  const _NonProctoredStrip({required this.label});
+  String _sessionLabel(String type) {
+    return type == SessionType.assessment ? 'Assessment' : 'Examination';
+  }
 
-  final String label;
+  String _formatSummary() {
+    if (cfg.enabledFormats.isEmpty) return cfg.sections.map(_sectionTitle).join(', ');
+    return cfg.enabledFormats.map((format) => format.label).join(', ');
+  }
+
+  String _securitySummary() {
+    final policy = cfg.securityPolicy;
+    return [
+      cfg.isRemoteProctored ? 'remote proctored' : 'normal mode',
+      policy.shuffleQuestions ? 'shuffled questions' : 'fixed order',
+      policy.lockCopyPaste ? 'copy/paste locked' : 'copy/paste allowed',
+      if (policy.calculatorEnabled) 'calculator enabled',
+    ].join(' • ');
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cs.onSurface.withValues(alpha: 0.03),
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.shield_outlined, color: cs.onSurface),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  "Non-proctored distance $label session.",
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+
+    return Scaffold(
+      body: LuxuryScaffold(
+        safeArea: true,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: _RunHero(
+                title: '${cfg.courseCode} - ${_sessionLabel(cfg.sessionType)}',
+                subtitle: _useProctoring
+                    ? 'Protected examination workspace. Start any pending section, then submit when ready.'
+                    : 'Normal assessment workspace. Start sections and submit when ready.',
+                onBack: () => Get.back<void>(),
               ),
-            ],
-          ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                children: [
+                  if (_useProctoring)
+                    Obx(
+                      () => _StatusCard(
+                        icon: Icons.security_rounded,
+                        title: 'Integrity score: ${proctoring.integrityScore.value}',
+                        subtitle: proctoring.isExamPaused.value
+                            ? 'Exam paused for verification.'
+                            : 'Camera, audio, screen, and device checks are active.',
+                      ),
+                    )
+                  else
+                    _StatusCard(
+                      icon: Icons.school_outlined,
+                      title: 'Normal mode',
+                      subtitle: 'No camera or audio proctoring is active.',
+                    ),
+                  const SizedBox(height: 12),
+                  _StatusCard(
+                    icon: Icons.tune_rounded,
+                    title: 'Session plan',
+                    subtitle: 'Formats: ${_formatSummary()}\nSecurity: ${_securitySummary()}',
+                  ),
+                  if (cfg.whiteboardEnabled) ...[
+                    const SizedBox(height: 12),
+                    Obx(
+                      () => _WhiteboardCard(
+                        required: cfg.whiteboardRequired,
+                        prompt: cfg.whiteboardPrompt,
+                        strokeCount: ctrl.whiteboardStrokes.length,
+                        onOpen: _openWhiteboard,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Obx(() {
+                    final done = _doneSections;
+                    return Column(
+                      children: _sectionOrder
+                          .where(cfg.sections.contains)
+                          .map(
+                            (section) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: _SectionTile(
+                                title: _sectionTitle(section),
+                                done: done.contains(section),
+                                onStart: done.contains(section)
+                                    ? null
+                                    : () => _startSection(section),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    );
+                  }),
+                  const SizedBox(height: 14),
+                  Obx(() {
+                    final next = _nextSection;
+                    final doneCount = _doneSections.length;
+                    return _GlassCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            '$doneCount of ${cfg.sections.length} section${cfg.sections.length == 1 ? '' : 's'} submitted',
+                            style: TextStyle(
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton.icon(
+                            onPressed: _startNextSection,
+                            icon: Icon(next == null ? Icons.check_circle_outline : Icons.play_arrow_rounded),
+                            label: Text(next == null ? 'Submit ${_sessionLabel(cfg.sessionType)}' : 'Start ${_sectionTitle(next)}'),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: _hasAnySubmittedSection ? _finishExam : null,
+                            icon: const Icon(Icons.stop_circle_outlined),
+                            label: const Text('End and submit now'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -479,12 +400,7 @@ class _NonProctoredStrip extends StatelessWidget {
 }
 
 class _RunHero extends StatelessWidget {
-  const _RunHero({
-    required this.title,
-    required this.subtitle,
-    required this.onBack,
-  });
-
+  const _RunHero({required this.title, required this.subtitle, required this.onBack});
   final String title;
   final String subtitle;
   final VoidCallback onBack;
@@ -492,45 +408,17 @@ class _RunHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            cs.primary.withValues(alpha: 0.95),
-            cs.secondary.withValues(alpha: 0.80),
-          ],
-        ),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-            color: cs.primary.withValues(alpha: 0.18),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
       ),
       child: Row(
         children: [
-          InkWell(
-            onTap: onBack,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-              ),
-            ),
+          IconButton.filledTonal(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -542,7 +430,7 @@ class _RunHero extends StatelessWidget {
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
-                    fontSize: 18,
+                    fontSize: 20,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -550,7 +438,45 @@ class _RunHero extends StatelessWidget {
                   subtitle,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.92),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusCard extends StatelessWidget {
+  const _StatusCard({required this.icon, required this.title, required this.subtitle});
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _GlassCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: cs.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.72),
                     fontWeight: FontWeight.w600,
+                    height: 1.3,
                   ),
                 ),
               ],
@@ -563,124 +489,44 @@ class _RunHero extends StatelessWidget {
 }
 
 class _SectionTile extends StatelessWidget {
-  const _SectionTile({
-    required this.title,
-    required this.enabled,
-    required this.done,
-  });
-
+  const _SectionTile({required this.title, required this.done, required this.onStart});
   final String title;
-  final bool enabled;
   final bool done;
+  final VoidCallback? onStart;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
-    final bg = enabled
-        ? cs.onSurface.withValues(alpha: 0.03)
-        : cs.onSurface.withValues(alpha: 0.015);
-
-    final border = enabled
-        ? cs.onSurface.withValues(alpha: 0.06)
-        : cs.onSurface.withValues(alpha: 0.04);
-
-    final icon = done
-        ? Icons.verified_outlined
-        : (enabled ? Icons.circle_outlined : Icons.remove_circle_outline);
-
-    final iconColor = done
-        ? cs.primary
-        : (enabled
-              ? cs.onSurface.withValues(alpha: 0.55)
-              : cs.onSurface.withValues(alpha: 0.35));
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border),
-      ),
+    return _GlassCard(
       child: Row(
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: iconColor),
+          Icon(
+            done ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+            color: done ? Colors.green : cs.primary,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               title,
               style: const TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
-          if (!enabled)
-            Text(
-              "OFF",
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                color: cs.onSurface.withValues(alpha: 0.55),
-              ),
-            ),
-          if (done)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: cs.primary.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                "Done",
-                style: TextStyle(
-                  color: cs.primary,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ),
+          if (!done)
+            TextButton.icon(
+              onPressed: onStart,
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Start'),
+            )
+          else
+            const Text('Submitted', style: TextStyle(fontWeight: FontWeight.w800)),
         ],
       ),
     );
   }
 }
 
-class _InfoStrip extends StatelessWidget {
-  const _InfoStrip({required this.text, required this.icon});
-  final String text;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.secondary.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: cs.secondary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WhiteboardStrip extends StatelessWidget {
-  const _WhiteboardStrip({
+class _WhiteboardCard extends StatelessWidget {
+  const _WhiteboardCard({
     required this.required,
     required this.prompt,
     required this.strokeCount,
@@ -694,95 +540,47 @@ class _WhiteboardStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final hasSketch = strokeCount > 0;
+    return _GlassCard(
+      child: Row(
+        children: [
+          const Icon(Icons.draw_outlined),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${required ? 'Required' : 'Optional'} whiteboard • $strokeCount strokes${prompt == null ? '' : '\n$prompt'}',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: onOpen,
+            icon: const Icon(Icons.edit_rounded),
+            label: const Text('Open'),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
+class _GlassCard extends StatelessWidget {
+  const _GlassCard({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: cs.onSurface.withValues(alpha: 0.03),
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+            color: cs.surface.withValues(alpha: 0.92),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.draw_outlined, color: cs.primary),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      required
-                          ? 'Whiteboard diagram is required.'
-                          : 'Whiteboard diagram is available.',
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: (hasSketch ? cs.primary : cs.secondary).withValues(
-                        alpha: 0.12,
-                      ),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      hasSketch ? 'Added' : 'Pending',
-                      style: TextStyle(
-                        color: hasSketch ? cs.primary : cs.secondary,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (prompt != null && prompt!.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  prompt!.trim(),
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.72),
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    hasSketch
-                        ? '$strokeCount stroke(s) captured'
-                        : 'No drawing captured yet',
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.72),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const Spacer(),
-                  OutlinedButton.icon(
-                    onPressed: onOpen,
-                    icon: const Icon(Icons.edit_outlined),
-                    label: Text(
-                      hasSketch ? 'Edit whiteboard' : 'Open whiteboard',
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          child: child,
         ),
       ),
     );
