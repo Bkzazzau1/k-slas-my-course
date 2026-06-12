@@ -31,70 +31,69 @@ class MultiFormatSampleExamService {
     required String courseCode,
     required String topic,
   }) {
-    final source = 'K-SLAS assessment sample pack: $courseCode';
     return [
       MultiFormatQuestion(
-        id: 'mf_single_integrity',
+        id: 'mf_single_tree_search',
         type: MultiFormatQuestionType.objectiveSingle,
         questionText:
-            'Which platform feature is most important for protecting a graded distance-learning assessment?',
+            'Which structure gives efficient ordered search when values are inserted according to a left-less-than-root and right-greater-than-root rule?',
         options: const [
-          'Identity verification and live integrity monitoring',
-          'Allowing unlimited device switching',
-          'Disabling answer autosave',
-          'Hiding lecturer feedback permanently',
+          'Binary search tree',
+          'Plain queue',
+          'Stack',
+          'Unordered list only',
         ],
         correctIndexes: const [0],
         points: 1,
-        sourceRef: source,
+        sourceRef: '',
       ),
       MultiFormatQuestion(
-        id: 'mf_multi_controls',
+        id: 'mf_multi_bfs_properties',
         type: MultiFormatQuestionType.objectiveMultiple,
         questionText:
-            'Select the controls that should be active during a proctored graded assessment.',
+            'Select the statements that correctly describe breadth-first search in an unweighted graph.',
         options: const [
-          'Camera/environment verification',
-          'Copy-and-paste restriction',
-          'Question shuffling',
-          'Anonymous account sharing',
+          'It visits vertices level by level',
+          'It commonly uses a queue',
+          'It can find a shortest path by number of edges',
+          'It must use recursion for every implementation',
         ],
         correctIndexes: const [0, 1, 2],
         points: 3,
-        sourceRef: source,
+        sourceRef: '',
       ),
       MultiFormatQuestion(
-        id: 'mf_fill_autosave',
+        id: 'mf_fill_complexity',
         type: MultiFormatQuestionType.fillBlank,
         questionText:
-            'Before final submission, the platform should continuously ______ student answers to prevent data loss.',
-        correctTextAnswers: const ['autosave', 'auto-save', 'save'],
+            'An algorithm with two nested loops over the same input size usually has ______ time complexity.',
+        correctTextAnswers: const ['o(n^2)', 'o(n²)', 'quadratic'],
         points: 2,
-        sourceRef: source,
+        sourceRef: '',
       ),
       MultiFormatQuestion(
-        id: 'mf_essay_resilience',
+        id: 'mf_essay_selection',
         type: MultiFormatQuestionType.essay,
         questionText:
-            'Explain how K-SLAS should combine assessment integrity, offline resilience, and post-submission feedback for distance learners.',
+            'A course-registration system must search student records, process requests in arrival order, and rank students by score. Recommend suitable data structures and justify each recommendation.',
         correctTextAnswers: const [
-          'integrity',
-          'offline',
-          'autosave',
-          'feedback',
+          'hash table',
+          'queue',
+          'priority queue',
+          'time complexity',
         ],
         points: 10,
-        sourceRef: source,
+        sourceRef: '',
       ),
       MultiFormatQuestion(
-        id: 'mf_whiteboard_flow',
+        id: 'mf_whiteboard_bst',
         type: MultiFormatQuestionType.whiteboard,
         questionText:
-            'Use the whiteboard to sketch the flow of a remote graded assessment from login to submission.',
+            'Draw a binary search tree formed by inserting 50, 30, 70, 20, 40, 60, and 80 in that order.',
         whiteboardPrompt:
-            'Include verification, question delivery, autosave, answer submission, and lecturer feedback.',
+            'Show the final tree clearly and label the left and right child relationships.',
         points: 8,
-        sourceRef: source,
+        sourceRef: '',
       ),
     ];
   }
