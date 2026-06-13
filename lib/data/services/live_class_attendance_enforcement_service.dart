@@ -72,7 +72,7 @@ class LiveClassAttendanceEnforcementService {
     final duration = session.durationMinutes <= 0 ? 1 : session.durationMinutes;
     final rawMinutes = participant.attendanceMinutesAt(currentTime);
     final minutes = rawMinutes < 0 ? 0 : rawMinutes;
-    final percentage = ((minutes / duration) * 100).round().clamp(0, 100);
+    final percentage = ((minutes / duration) * 100).round().clamp(0, 100).toInt();
     final lateJoin = _isLateJoin(
       session: session,
       participant: participant,
