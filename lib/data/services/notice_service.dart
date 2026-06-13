@@ -1,10 +1,11 @@
 import 'package:my_courses/data/models/notice_model.dart';
 
 import 'notice_storage.dart';
+import 'notice_visibility_policy.dart';
 import 'student_profile_storage.dart';
 
 class NoticeService {
-  // Later: fetch from backend using profile school/dept/level/courses.
+  // Later: fetch from backend using authenticated profile-based targeting.
   static List<NoticeModel> loadCuratedNotices() {
     final p = StudentProfileStorage.load();
     final now = DateTime.now();
@@ -56,13 +57,7 @@ class NoticeService {
     ];
 
     final published = NoticeStorage.loadPublishedNotices()
-        .where((notice) => notice.isPublished && !notice.isExpired)
-        .where(
-          (notice) =>
-              notice.audience == NoticeAudience.students ||
-              notice.audience == NoticeAudience.all,
-        )
-        .where((notice) => _matchesStudentProfile(notice, p))
+        .where((notice) => _isVisibleToCurrentStudent(notice, p))
         .toList();
 
     final merged = <String, NoticeModel>{};
@@ -70,7 +65,7 @@ class NoticeService {
       merged[notice.id] = notice;
     }
     final result = merged.values
-        .where((notice) => _matchesStudentProfile(notice, p))
+        .where((notice) => _isVisibleToCurrentStudent(notice, p))
         .toList();
     result.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
@@ -80,39 +75,10 @@ class NoticeService {
     return result;
   }
 
-  static bool _matchesStudentProfile(NoticeModel notice, dynamic profile) {
-    if (!_isGeneralNotice(notice) && profile == null) return false;
-    if (_isGeneralNotice(notice)) return true;
-    if (profile == null) return false;
-
-    if (notice.schoolId != null && notice.schoolId != profile.schoolId) return false;
-
-    if (!notice.matchesAcademicTarget(
-      level: profile.level,
-      semester: profile.semester,
-      departmentId: profile.departmentId,
-      programmeId: profile.programmeId,
-      cohortKey: profile.studentCategoryKey,
-    )) {
-      return false;
-    }
-
-    if (notice.scope == NoticeScope.course && notice.courseCode != null) {
-      return profile.selectedCourses.contains(notice.courseCode);
-    }
-
-    return true;
-  }
-
-  static bool _isGeneralNotice(NoticeModel notice) {
-    final hasNoAcademicTarget = notice.schoolId == null &&
-        notice.departmentId == null &&
-        notice.programmeId == null &&
-        notice.targetLevel == null &&
-        notice.targetSemester == null &&
-        notice.targetCohortKey == null &&
-        notice.courseCode == null;
-    return hasNoAcademicTarget &&
-        (notice.scope == NoticeScope.school || notice.scope == NoticeScope.exam);
+  static bool _isVisibleToCurrentStudent(NoticeModel notice, dynamic profile) {
+    return NoticeVisibilityPolicy.isVisibleToStudent(
+      notice: notice,
+      profile: profile,
+    );
   }
 }
