@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../core/widgets/luxury_scaffold.dart';
@@ -51,6 +52,8 @@ class _LiveClassHistoryViewState extends State<LiveClassHistoryView> {
       _LiveClassNotesSheet(
         item: item,
         controller: notesController,
+        onCopyNotes: () => _copyNotes(item, notesController.text),
+        onCopyStudyDocument: () => _copyStudyDocument(item, notesController.text),
         onSave: () async {
           await LiveClassStudentNotesService.save(
             sessionId: sessionId,
@@ -69,6 +72,52 @@ class _LiveClassHistoryViewState extends State<LiveClassHistoryView> {
     );
     notesController.dispose();
     if (mounted) setState(_load);
+  }
+
+  Future<void> _copyNotes(_HistoryItem item, String notes) async {
+    final text = notes.trim().isEmpty ? _emptyNotesTemplate(item) : notes.trim();
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Notes copied to clipboard.')),
+    );
+  }
+
+  Future<void> _copyStudyDocument(_HistoryItem item, String notes) async {
+    await Clipboard.setData(ClipboardData(text: _studyDocumentText(item, notes)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Study document text copied.')),
+    );
+  }
+
+  String _emptyNotesTemplate(_HistoryItem item) {
+    return 'Live Class Notes\n'
+        'Course: ${item.courseCode}\n'
+        'Class: ${item.title}\n'
+        'Lecturer: ${item.lecturer}\n'
+        'Date: ${item.dateLabel}\n\n'
+        'My Notes:\n';
+  }
+
+  String _studyDocumentText(_HistoryItem item, String notes) {
+    final attendance = item.attendance;
+    final body = notes.trim().isEmpty ? 'No notes written yet.' : notes.trim();
+    return 'LIVE CLASS STUDY NOTES\n\n'
+        'Course: ${item.courseCode}\n'
+        'Class: ${item.title}\n'
+        'Lecturer: ${item.lecturer}\n'
+        'Date: ${item.dateLabel}\n'
+        'Attendance: ${attendance?.scoreLabel ?? 'Not recorded'}\n'
+        'Attendance Rate: ${attendance == null ? '0%' : '${attendance.percentage}%'}\n'
+        'Replay: ${item.replayAvailable ? 'Available' : 'Not available'}\n'
+        'Receipt: ${attendance?.receiptNumber ?? 'Not available'}\n\n'
+        'NOTES\n'
+        '$body\n\n'
+        'REVISION POINTS\n'
+        '- Review this class note before the next lecture.\n'
+        '- Convert key explanations into questions.\n'
+        '- Mark unclear areas for lecturer follow-up.';
   }
 
   @override
@@ -297,9 +346,17 @@ class _HistoryCard extends StatelessWidget {
 }
 
 class _LiveClassNotesSheet extends StatelessWidget {
-  const _LiveClassNotesSheet({required this.item, required this.controller, required this.onSave});
+  const _LiveClassNotesSheet({
+    required this.item,
+    required this.controller,
+    required this.onCopyNotes,
+    required this.onCopyStudyDocument,
+    required this.onSave,
+  });
   final _HistoryItem item;
   final TextEditingController controller;
+  final VoidCallback onCopyNotes;
+  final VoidCallback onCopyStudyDocument;
   final VoidCallback onSave;
 
   @override
@@ -345,6 +402,11 @@ class _LiveClassNotesSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              OutlinedButton.icon(onPressed: onCopyNotes, icon: const Icon(Icons.copy_rounded), label: const Text('Copy notes')),
+              OutlinedButton.icon(onPressed: onCopyStudyDocument, icon: const Icon(Icons.description_outlined), label: const Text('Copy study document')),
+            ]),
+            const SizedBox(height: 8),
             SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: onSave, icon: const Icon(Icons.save_rounded), label: const Text('Save notes'))),
           ]),
         ),
