@@ -29,7 +29,10 @@ class LiveSessionVideoSurface extends StatelessWidget {
     return AnimatedBuilder(
       animation: participantListenable,
       builder: (context, _) {
-        final track = liveSessionVideoTrackFor(participantListenable);
+        final screenTrack = liveSessionScreenShareTrackFor(participantListenable);
+        final cameraTrack = liveSessionVideoTrackFor(participantListenable);
+        final useScreenShare = screenTrack != null && !screenTrack.muted;
+        final track = useScreenShare ? screenTrack : cameraTrack;
         if (track == null || track.muted) {
           return _VideoFallback(
             participant: participant,
@@ -44,7 +47,19 @@ class LiveSessionVideoSurface extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              lk.VideoTrackRenderer(track, fit: lk.VideoViewFit.cover),
+              lk.VideoTrackRenderer(
+                track,
+                fit: useScreenShare ? lk.VideoViewFit.contain : lk.VideoViewFit.cover,
+              ),
+              if (useScreenShare)
+                Positioned(
+                  left: 12,
+                  top: 12,
+                  child: _SurfaceLabel(
+                    icon: Icons.screen_share_rounded,
+                    label: '${participant.displayName} screen',
+                  ),
+                ),
               if (participantListenable.isSpeaking)
                 IgnorePointer(
                   child: DecoratedBox(
