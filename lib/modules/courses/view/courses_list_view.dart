@@ -60,6 +60,7 @@ class CoursesListView extends GetView<CoursesController> {
                       onLive: () => Get.toNamed(Routes.liveSessions),
                       onCalendar: () => Get.toNamed(Routes.timetable),
                       onRecord: () => Get.toNamed(Routes.academicRecord),
+                      onRegister: () => Get.toNamed(Routes.courseRegistration),
                       onReceipts: () => Get.toNamed(Routes.results),
                     ),
                   ),
@@ -176,7 +177,7 @@ class _LearningHubHeader extends StatelessWidget {
         ]),
         const SizedBox(height: 10),
         Text(
-          'Courses, academic record, materials, assessments and learning tools organized in one student workspace.',
+          'Courses, registration, academic record, materials, assessments and learning tools organized in one student workspace.',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700, height: 1.25),
         ),
         const SizedBox(height: 14),
@@ -266,23 +267,31 @@ class _PriorityStrip extends StatelessWidget {
 }
 
 class _QuickCourseActions extends StatelessWidget {
-  const _QuickCourseActions({required this.onLive, required this.onCalendar, required this.onRecord, required this.onReceipts});
+  const _QuickCourseActions({
+    required this.onLive,
+    required this.onCalendar,
+    required this.onRecord,
+    required this.onRegister,
+    required this.onReceipts,
+  });
   final VoidCallback onLive;
   final VoidCallback onCalendar;
   final VoidCallback onRecord;
+  final VoidCallback onRegister;
   final VoidCallback onReceipts;
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(child: _MiniAction(icon: Icons.live_tv_outlined, label: 'Live', onTap: onLive)),
-      const SizedBox(width: 8),
-      Expanded(child: _MiniAction(icon: Icons.calendar_month_outlined, label: 'Calendar', onTap: onCalendar)),
-      const SizedBox(width: 8),
-      Expanded(child: _MiniAction(icon: Icons.school_outlined, label: 'Record', onTap: onRecord)),
-      const SizedBox(width: 8),
-      Expanded(child: _MiniAction(icon: Icons.receipt_long_outlined, label: 'Receipts', onTap: onReceipts)),
-    ]);
+    return LayoutBuilder(builder: (context, constraints) {
+      final width = (constraints.maxWidth - 16) / 3;
+      return Wrap(spacing: 8, runSpacing: 8, children: [
+        SizedBox(width: width, child: _MiniAction(icon: Icons.app_registration_rounded, label: 'Register', onTap: onRegister)),
+        SizedBox(width: width, child: _MiniAction(icon: Icons.school_outlined, label: 'Record', onTap: onRecord)),
+        SizedBox(width: width, child: _MiniAction(icon: Icons.live_tv_outlined, label: 'Live', onTap: onLive)),
+        SizedBox(width: width, child: _MiniAction(icon: Icons.calendar_month_outlined, label: 'Calendar', onTap: onCalendar)),
+        SizedBox(width: width, child: _MiniAction(icon: Icons.receipt_long_outlined, label: 'Receipts', onTap: onReceipts)),
+      ]);
+    });
   }
 }
 
