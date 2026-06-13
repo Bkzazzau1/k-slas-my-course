@@ -6,6 +6,7 @@ abstract class Routes {
   static const demoWalkthrough = '/demo/walkthrough';
   static const courses = '/courses';
   static const courseDetail = '/courses/detail';
+  static const academicRecord = '/courses/academic-record';
   static const chat = '/chat';
   static const practiceSetup = '/practice/setup';
   static const practiceSession = '/practice/session';
