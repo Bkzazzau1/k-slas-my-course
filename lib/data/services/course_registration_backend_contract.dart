@@ -4,9 +4,6 @@ class CourseRegistrationBackendPath {
   static const submitRegistration = '/api/v1/students/me/course-registration/submit';
   static const myRegistrationStatus = '/api/v1/students/me/course-registration/status';
   static const withdrawRegistration = '/api/v1/students/me/course-registration/withdraw';
-  static const approveRegistration = '/api/v1/course-registrations/{registrationId}/approve';
-  static const rejectRegistration = '/api/v1/course-registrations/{registrationId}/reject';
-  static const confirmCarryover = '/api/v1/course-registrations/{registrationId}/carryovers/confirm';
 }
 
 class CourseRegistrationBackendContract {
@@ -60,19 +57,7 @@ class CourseRegistrationBackendContract {
         'previousGrade': 'F',
         'repeatReason': 'Failed previous attempt',
         'requiresApproval': true,
-      },
-      {
-        'courseCode': 'GST 203',
-        'courseTitle': 'Entrepreneurship Foundation',
-        'creditUnits': 2,
-        'type': 'ELECTIVE',
-        'level': 200,
-        'semester': 2,
-        'registrationKind': 'REPEAT',
-        'previousGrade': 'ABS',
-        'repeatReason': 'Absent or missing result',
-        'requiresApproval': true,
-      },
+      }
     ],
   };
 
@@ -102,21 +87,15 @@ class CourseRegistrationBackendContract {
     'message': 'Course registration submitted for academic office approval.',
   };
 
-  static const validationRules = [
+  static const studentValidationRules = [
     'The backend must derive the student from the authenticated token only.',
-    'Core courses from the student programme curriculum must be automatically required and cannot be removed by the client.',
-    'Elective courses must be selected only from electives available to the student programme, cohort, level, and semester.',
-    'Carryover/repeat courses must come from failed, absent, missing-result, withdrawn, or approved-repeat records belonging to the authenticated student.',
-    'Carryover/repeat courses outside the normal level/semester must require academic office or exam officer confirmation before final approval.',
-    'Selected credit units must be greater than or equal to minCreditUnits and less than or equal to maxCreditUnits, unless an authorized overload waiver is recorded.',
-    'The backend must reject courses outside the student programme curriculum unless explicitly approved as carryover, spillover, repeat, or approved special registration.',
-    'The backend must prevent duplicate registration for the same course/session unless policy allows course repeat.',
-    'The backend must block registration after the registration deadline unless exam officer/admin override is recorded.',
-    'Submitted registration should enter SUBMITTED, CARRYOVER_REVIEW, or APPROVED depending on institution policy.',
-    'Students must not register for another student by supplying studentId in the payload.',
+    'The student app may submit selected elective and carryover course codes, but cannot approve them.',
+    'Core courses must come from the student programme curriculum and cannot be removed by the client.',
+    'Elective courses must be available to the authenticated student programme, cohort, level, and semester.',
+    'Carryover/repeat courses returned to the student app must belong to the authenticated student records only.',
   ];
 
-  static const approvalStatuses = [
+  static const studentVisibleStatuses = [
     'DRAFT',
     'SUBMITTED',
     'CARRYOVER_REVIEW',
@@ -124,15 +103,5 @@ class CourseRegistrationBackendContract {
     'REJECTED',
     'WITHDRAWN',
     'LOCKED',
-  ];
-
-  static const auditEvents = [
-    'COURSE_REGISTRATION_DRAFT_SAVED',
-    'COURSE_REGISTRATION_SUBMITTED',
-    'COURSE_REGISTRATION_CARRYOVER_CONFIRMED',
-    'COURSE_REGISTRATION_APPROVED',
-    'COURSE_REGISTRATION_REJECTED',
-    'COURSE_REGISTRATION_WITHDRAWN',
-    'COURSE_REGISTRATION_LOCKED',
   ];
 }
