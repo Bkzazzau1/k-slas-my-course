@@ -26,6 +26,8 @@ class NoticeService {
         priority: 1,
         pinned: true,
         requiresAcknowledgement: true,
+        targetLevel: p?.level,
+        targetSemester: p?.semester,
       ),
       NoticeModel(
         id: 'n2',
@@ -36,6 +38,7 @@ class NoticeService {
         courseCode: course,
         source: 'Class Rep',
         createdAt: now.subtract(const Duration(days: 1)),
+        targetLevel: p?.level,
       ),
       NoticeModel(
         id: 'n3',
@@ -54,18 +57,35 @@ class NoticeService {
               notice.audience == NoticeAudience.students ||
               notice.audience == NoticeAudience.all,
         )
+        .where((notice) => _matchesStudentProfile(notice, p))
         .toList();
 
     final merged = <String, NoticeModel>{};
     for (final notice in [...published, ...demo]) {
       merged[notice.id] = notice;
     }
-    final result = merged.values.toList();
+    final result = merged.values
+        .where((notice) => _matchesStudentProfile(notice, p))
+        .toList();
     result.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
       if (a.priority != b.priority) return b.priority.compareTo(a.priority);
       return b.createdAt.compareTo(a.createdAt);
     });
     return result;
+  }
+
+  static bool _matchesStudentProfile(NoticeModel notice, dynamic profile) {
+    if (profile == null) return notice.targetLevel == null && notice.targetSemester == null;
+    if (!notice.matchesLevel(level: profile.level, semester: profile.semester)) return false;
+
+    if (notice.schoolId != null && notice.schoolId != profile.schoolId) return false;
+    if (notice.departmentId != null && notice.departmentId != profile.departmentId) {
+      return false;
+    }
+    if (notice.scope == NoticeScope.course && notice.courseCode != null) {
+      return profile.selectedCourses.contains(notice.courseCode);
+    }
+    return true;
   }
 }
