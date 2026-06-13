@@ -192,6 +192,10 @@ class LiveSessionMediaService {
     await room?.localParticipant?.setMicrophoneEnabled(enabled);
   }
 
+  Future<void> setScreenShareEnabled(lk.Room? room, bool enabled) async {
+    await room?.localParticipant?.setScreenShareEnabled(enabled);
+  }
+
   Future<LiveSessionTokenResponse> _fetchToken({
     required String sessionId,
     required String participantId,
