@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/live_session_models.dart';
 import '../../../data/services/live_class_student_notes_service.dart';
+import '../../../data/services/live_screen_share_control_service.dart';
 import '../../../data/services/student_profile_storage.dart';
 import '../../../data/services/submission_history_service.dart';
 import '../controller/live_sessions_controller.dart';
@@ -33,9 +34,13 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
 
   Timer? refreshTimer;
   _StudentRoomPanel activePanel = _StudentRoomPanel.chat;
+  LiveScreenShareRequest? screenShareRequest;
   bool handRaised = false;
   bool attendanceSaved = false;
   bool screenShareOn = false;
+
+  String get participantId =>
+      controller.activeParticipantId.value ?? 'student-${registrationNumber.toLowerCase()}';
 
   @override
   void initState() {
@@ -48,9 +53,10 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
     registrationNumber = args['registrationNumber']?.toString() ?? profile?.matricNo ?? profile?.email ?? 'student-demo';
     noteController.text = LiveClassStudentNotesService.load(sessionId);
     WidgetsBinding.instance.addPostFrameCallback((_) => _openRoom());
-    refreshTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
+    refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
       if (!mounted) return;
       await controller.refreshRoom();
+      await _syncScreenShareApproval();
       if (mounted) setState(() {});
     });
   }
@@ -58,7 +64,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
   @override
   void dispose() {
     refreshTimer?.cancel();
-    unawaited(_stopScreenShareSilently());
+    unawaited(_stopScreenShareSilently(markStopped: true));
     unawaited(controller.disconnectMediaRoom());
     chatController.dispose();
     questionController.dispose();
@@ -73,6 +79,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
       displayName: displayName,
       registrationNumber: registrationNumber,
     );
+    await _syncScreenShareApproval();
   }
 
   Future<void> _sendChat() async {
@@ -101,23 +108,93 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
   }
 
   Future<void> _toggleScreenShare() async {
-    final next = !screenShareOn;
+    if (screenShareOn) {
+      await _stopScreenShareSilently(markStopped: true);
+      if (!mounted) return;
+      setState(() => screenShareOn = false);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Screen sharing stopped.')));
+      return;
+    }
+
+    final existing = LiveScreenShareControlService.latestForParticipant(
+      sessionId: sessionId,
+      participantId: participantId,
+    );
+
+    if (existing == null || existing.isDenied || existing.isStopped) {
+      final request = await LiveScreenShareControlService.requestShare(
+        sessionId: sessionId,
+        participantId: participantId,
+        studentName: displayName,
+        registrationNumber: registrationNumber,
+      );
+      if (!mounted) return;
+      setState(() => screenShareRequest = request);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Screen share request sent to the lecturer for approval.')),
+      );
+      return;
+    }
+
+    if (existing.isPending) {
+      if (!mounted) return;
+      setState(() => screenShareRequest = existing);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Waiting for lecturer approval before screen sharing.')),
+      );
+      return;
+    }
+
+    if (existing.canStart) {
+      await _startApprovedScreenShare(existing);
+    }
+  }
+
+  Future<void> _syncScreenShareApproval() async {
+    final request = LiveScreenShareControlService.latestForParticipant(
+      sessionId: sessionId,
+      participantId: participantId,
+    );
+    screenShareRequest = request;
+
+    if (request == null) return;
+    if ((request.isDenied || request.isStopped) && screenShareOn) {
+      await _stopScreenShareSilently(markStopped: false);
+      if (mounted) setState(() => screenShareOn = false);
+      return;
+    }
+
+    if (request.isApproved && !screenShareOn) {
+      await _startApprovedScreenShare(request, silent: true);
+    }
+  }
+
+  Future<void> _startApprovedScreenShare(
+    LiveScreenShareRequest request, {
+    bool silent = false,
+  }) async {
     try {
       final localParticipant = controller.rtcRoom.value?.localParticipant;
       if (localParticipant != null) {
-        await localParticipant.setScreenShareEnabled(next);
+        await localParticipant.setScreenShareEnabled(true);
       }
-      if (!mounted) return;
-      setState(() => screenShareOn = next);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            next
-                ? 'Screen sharing started. The lecturer can see your shared screen.'
-                : 'Screen sharing stopped.',
-          ),
-        ),
+      await LiveScreenShareControlService.markStarted(
+        sessionId: sessionId,
+        participantId: participantId,
       );
+      if (!mounted) return;
+      setState(() {
+        screenShareOn = true;
+        screenShareRequest = LiveScreenShareControlService.latestForParticipant(
+          sessionId: sessionId,
+          participantId: participantId,
+        );
+      });
+      if (!silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Approved. Your screen is now shared with the lecturer.')),
+        );
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -126,12 +203,19 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
     }
   }
 
-  Future<void> _stopScreenShareSilently() async {
-    if (!screenShareOn) return;
+  Future<void> _stopScreenShareSilently({required bool markStopped}) async {
+    if (!screenShareOn && !markStopped) return;
     try {
       await controller.rtcRoom.value?.localParticipant?.setScreenShareEnabled(false);
     } catch (_) {
       // Ignore cleanup errors while leaving the class.
+    }
+    if (markStopped) {
+      await LiveScreenShareControlService.stop(
+        sessionId: sessionId,
+        participantId: participantId,
+        stoppedBy: displayName,
+      );
     }
   }
 
@@ -140,7 +224,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
   }
 
   Future<void> _leaveClass() async {
-    await _stopScreenShareSilently();
+    await _stopScreenShareSilently(markStopped: true);
     await _saveNotes(noteController.text);
     await _saveAttendanceReceipt();
     if (mounted) Get.back<void>();
@@ -203,6 +287,22 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
     return items;
   }
 
+  String _screenShareLabel() {
+    final request = screenShareRequest;
+    if (screenShareOn) return 'Stop share';
+    if (request == null || request.isDenied || request.isStopped) return 'Request share';
+    if (request.isPending) return 'Pending';
+    if (request.canStart) return 'Start share';
+    return 'Request share';
+  }
+
+  IconData _screenShareIcon() {
+    final request = screenShareRequest;
+    if (screenShareOn) return Icons.stop_screen_share_rounded;
+    if (request?.isPending == true) return Icons.hourglass_top_rounded;
+    return Icons.screen_share_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -228,6 +328,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
                   room: room,
                   participant: participant,
                   screenShareOn: screenShareOn,
+                  screenShareRequest: screenShareRequest,
                   onLeave: () => unawaited(_leaveClass()),
                 ),
               ),
@@ -247,6 +348,8 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
                                 micOn: micOn,
                                 cameraOn: cameraOn,
                                 screenShareOn: screenShareOn,
+                                screenShareLabel: _screenShareLabel(),
+                                screenShareIcon: _screenShareIcon(),
                                 handRaised: handRaised,
                                 onMic: () => controller.toggleMicrophone(!micOn),
                                 onCamera: () => controller.toggleCamera(!cameraOn),
@@ -289,6 +392,8 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
                               micOn: micOn,
                               cameraOn: cameraOn,
                               screenShareOn: screenShareOn,
+                              screenShareLabel: _screenShareLabel(),
+                              screenShareIcon: _screenShareIcon(),
                               handRaised: handRaised,
                               onMic: () => controller.toggleMicrophone(!micOn),
                               onCamera: () => controller.toggleCamera(!cameraOn),
@@ -325,10 +430,11 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
 }
 
 class _RoomHeader extends StatelessWidget {
-  const _RoomHeader({required this.room, required this.participant, required this.screenShareOn, required this.onLeave});
+  const _RoomHeader({required this.room, required this.participant, required this.screenShareOn, required this.screenShareRequest, required this.onLeave});
   final LiveSessionRoomState room;
   final LiveSessionParticipant? participant;
   final bool screenShareOn;
+  final LiveScreenShareRequest? screenShareRequest;
   final VoidCallback onLeave;
 
   @override
@@ -347,6 +453,12 @@ class _RoomHeader extends StatelessWidget {
         ])),
         if (screenShareOn) ...[
           const _HeaderPill(icon: Icons.screen_share_rounded, label: 'Sharing'),
+          const SizedBox(width: 8),
+        ] else if (screenShareRequest?.isPending == true) ...[
+          const _HeaderPill(icon: Icons.hourglass_top_rounded, label: 'Share pending'),
+          const SizedBox(width: 8),
+        ] else if (screenShareRequest?.isApproved == true) ...[
+          const _HeaderPill(icon: Icons.verified_rounded, label: 'Share approved'),
           const SizedBox(width: 8),
         ],
         _HeaderPill(icon: Icons.groups_rounded, label: '${room.participants.length}'),
@@ -368,6 +480,8 @@ class _StageAndControls extends StatelessWidget {
     required this.micOn,
     required this.cameraOn,
     required this.screenShareOn,
+    required this.screenShareLabel,
+    required this.screenShareIcon,
     required this.handRaised,
     required this.onMic,
     required this.onCamera,
@@ -383,6 +497,8 @@ class _StageAndControls extends StatelessWidget {
   final bool micOn;
   final bool cameraOn;
   final bool screenShareOn;
+  final String screenShareLabel;
+  final IconData screenShareIcon;
   final bool handRaised;
   final VoidCallback onMic;
   final VoidCallback onCamera;
@@ -411,7 +527,7 @@ class _StageAndControls extends StatelessWidget {
                     ? LiveSessionScreenShareSurface(participant: self, mediaParticipant: selfMedia, borderRadius: BorderRadius.circular(22))
                     : LiveSessionVideoSurface(participant: fallbackLecturer, mediaParticipant: controller.mediaParticipantFor(fallbackLecturer.id), borderRadius: BorderRadius.circular(22)),
               ),
-              Positioned(left: 14, top: 14, child: _StagePill(text: showScreenShare ? 'Your screen is shared' : (room.session.isLiveAt(DateTime.now()) ? 'Live class' : room.session.statusLabelAt(DateTime.now())), icon: showScreenShare ? Icons.screen_share_rounded : Icons.radio_button_checked_rounded)),
+              Positioned(left: 14, top: 14, child: _StagePill(text: showScreenShare ? 'Your approved screen share' : (room.session.isLiveAt(DateTime.now()) ? 'Live class' : room.session.statusLabelAt(DateTime.now())), icon: showScreenShare ? Icons.screen_share_rounded : Icons.radio_button_checked_rounded)),
               Positioned(left: 14, bottom: 14, right: 14, child: Text(showScreenShare ? 'Sharing your screen with lecturer' : room.session.lecturerName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18))),
               Positioned(right: 14, bottom: 14, width: 150, height: 96, child: LiveSessionVideoSurface(participant: self, mediaParticipant: selfMedia, borderRadius: BorderRadius.circular(18))),
             ]),
@@ -423,7 +539,7 @@ class _StageAndControls extends StatelessWidget {
           child: Row(children: [
             _ControlButton(icon: micOn ? Icons.mic_rounded : Icons.mic_off_rounded, label: micOn ? 'Mute' : 'Unmute', selected: micOn, onTap: onMic),
             _ControlButton(icon: cameraOn ? Icons.videocam_rounded : Icons.videocam_off_rounded, label: cameraOn ? 'Camera' : 'Camera off', selected: cameraOn, onTap: onCamera),
-            _ControlButton(icon: screenShareOn ? Icons.stop_screen_share_rounded : Icons.screen_share_rounded, label: screenShareOn ? 'Stop share' : 'Share screen', selected: screenShareOn, onTap: onScreenShare),
+            _ControlButton(icon: screenShareIcon, label: screenShareLabel, selected: screenShareOn, onTap: onScreenShare),
             _ControlButton(icon: Icons.front_hand_rounded, label: handRaised ? 'Lower hand' : 'Raise hand', selected: handRaised, onTap: onRaiseHand),
             _ControlButton(icon: Icons.question_answer_outlined, label: 'Ask', onTap: onAsk),
           ]),
