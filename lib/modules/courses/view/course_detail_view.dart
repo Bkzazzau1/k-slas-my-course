@@ -90,7 +90,10 @@ class _CourseDetailViewState extends State<CourseDetailView> with SingleTickerPr
               ),
               secondChild: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: _FoldedCoursePanelStrip(onUnfold: () => setState(() => _coursePanelCollapsed = false)),
+                child: _FoldedCoursePanelStrip(
+                  controller: _tabController,
+                  onUnfold: () => setState(() => _coursePanelCollapsed = false),
+                ),
               ),
             ),
             Expanded(
@@ -127,33 +130,84 @@ class _CourseDetailViewState extends State<CourseDetailView> with SingleTickerPr
 }
 
 class _FoldedCoursePanelStrip extends StatelessWidget {
-  const _FoldedCoursePanelStrip({required this.onUnfold});
+  const _FoldedCoursePanelStrip({required this.controller, required this.onUnfold});
+  final TabController controller;
   final VoidCallback onUnfold;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onUnfold,
+    return ClipRRect(
       borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: cs.primary.withValues(alpha: 0.10)),
-        ),
-        child: Row(children: [
-          Icon(Icons.unfold_more_rounded, color: cs.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Course controls folded. Tap here or the arrow above to show tabs and actions.',
-              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.72), fontWeight: FontWeight.w800),
-            ),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: cs.surface.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: cs.primary.withValues(alpha: 0.10)),
           ),
-          Text('Show', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900)),
-        ]),
+          child: Column(children: [
+            Row(children: [
+              Icon(Icons.compress_rounded, color: cs.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Controls folded. Use mini tabs below or show full controls.',
+                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.72), fontWeight: FontWeight.w800, fontSize: 12),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onUnfold,
+                icon: const Icon(Icons.unfold_more_rounded, size: 18),
+                label: const Text('Show'),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            _CompactFoldedTabStrip(controller: controller),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _CompactFoldedTabStrip extends StatelessWidget {
+  const _CompactFoldedTabStrip({required this.controller});
+  final TabController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+      ),
+      child: TabBar(
+        controller: controller,
+        isScrollable: true,
+        labelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: cs.primary.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.16)),
+        ),
+        tabs: const [
+          Tab(icon: Icon(Icons.menu_book_outlined, size: 18), text: 'Study'),
+          Tab(icon: Icon(Icons.play_circle_outline_rounded, size: 18), text: 'Video'),
+          Tab(icon: Icon(Icons.live_tv_outlined, size: 18), text: 'Live'),
+          Tab(icon: Icon(Icons.fact_check_outlined, size: 18), text: 'Tests'),
+          Tab(icon: Icon(Icons.history_edu_outlined, size: 18), text: 'Qs'),
+          Tab(icon: Icon(Icons.smart_toy_outlined, size: 18), text: 'AI'),
+          Tab(icon: Icon(Icons.psychology_outlined, size: 18), text: 'Revise'),
+        ],
       ),
     );
   }
