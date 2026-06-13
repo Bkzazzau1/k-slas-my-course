@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 
 import '../../../app/routes/app_routes.dart';
 import '../../../data/models/assignment_model.dart';
+import '../../../data/services/assignment_quality_service.dart';
+import '../../../data/services/assignment_submission_storage.dart';
 import '../controller/dashboard_controller.dart';
 
 class DashboardAssignmentsLux extends StatelessWidget {
@@ -25,6 +27,17 @@ class DashboardAssignmentsLux extends StatelessWidget {
         );
       }
 
+      final quality = [
+        for (final item in items)
+          AssignmentQualityService.statusFor(
+            assignment: item,
+            submission: AssignmentSubmissionStorage.loadSubmission(item.id),
+          ),
+      ];
+      final dueSoon = quality.where((item) => item.isDueSoon && !item.isSubmitted).length;
+      final overdue = quality.where((item) => item.isOverdue && !item.isSubmitted).length;
+      final submitted = quality.where((item) => item.isSubmitted).length;
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -38,7 +51,9 @@ class DashboardAssignmentsLux extends StatelessWidget {
                     ? cs.primary
                     : const Color(0xFFF57C00),
               ),
-              _pill(text: '${items.length} visible', tone: cs.secondary),
+              _pill(text: '$dueSoon due soon', tone: const Color(0xFFF57C00)),
+              _pill(text: '$overdue overdue', tone: const Color(0xFFD32F2F)),
+              _pill(text: '$submitted submitted', tone: cs.primary),
             ],
           ),
           const SizedBox(height: 10),
@@ -58,12 +73,18 @@ class DashboardAssignmentsLux extends StatelessWidget {
   }
 
   Widget _assignmentRow(DashboardController controller, AssignmentModel item) {
-    final submitted = controller.isAssignmentSubmitted(item.id);
-    final overdue = controller.isAssignmentOverdue(item);
-    final color = submitted
+    final submission = AssignmentSubmissionStorage.loadSubmission(item.id);
+    final statusInfo = AssignmentQualityService.statusFor(
+      assignment: item,
+      submission: submission,
+    );
+    final color = statusInfo.isSubmitted
         ? cs.primary
-        : (overdue ? const Color(0xFFD32F2F) : const Color(0xFFF57C00));
-    final status = submitted ? 'Submitted' : (overdue ? 'Overdue' : 'Pending');
+        : (statusInfo.isOverdue
+              ? const Color(0xFFD32F2F)
+              : statusInfo.isDueSoon
+              ? const Color(0xFFF57C00)
+              : cs.secondary);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -71,7 +92,7 @@ class DashboardAssignmentsLux extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.onSurface.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+        border: Border.all(color: color.withValues(alpha: 0.14)),
       ),
       child: Row(
         children: [
@@ -89,18 +110,27 @@ class DashboardAssignmentsLux extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Deadline: ${_fmtDateTime(item.deadline)}',
+                  statusInfo.detail,
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.68),
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: statusInfo.completionScore / 100,
+                    minHeight: 5,
+                    backgroundColor: cs.onSurface.withValues(alpha: 0.06),
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          _pill(text: status, tone: color),
+          _pill(text: statusInfo.label, tone: color),
         ],
       ),
     );
@@ -123,13 +153,4 @@ class DashboardAssignmentsLux extends StatelessWidget {
       ),
     );
   }
-}
-
-String _fmtDateTime(DateTime date) {
-  final day = date.day.toString().padLeft(2, '0');
-  final month = date.month.toString().padLeft(2, '0');
-  final year = date.year.toString();
-  final hour = date.hour.toString().padLeft(2, '0');
-  final minute = date.minute.toString().padLeft(2, '0');
-  return '$day/$month/$year $hour:$minute';
 }
