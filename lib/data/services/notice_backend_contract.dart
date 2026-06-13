@@ -1,39 +1,13 @@
 class NoticeBackendPath {
   static const listMyNotices = '/api/v1/notices/me';
-  static const listPublishedNotices = '/api/v1/notices';
-  static const createNotice = '/api/v1/notices';
   static const noticeDetail = '/api/v1/notices/{noticeId}';
-  static const updateNotice = '/api/v1/notices/{noticeId}';
-  static const publishNotice = '/api/v1/notices/{noticeId}/publish';
-  static const archiveNotice = '/api/v1/notices/{noticeId}/archive';
   static const acknowledgeNotice = '/api/v1/notices/{noticeId}/acknowledge';
-  static const noticeAcknowledgements = '/api/v1/notices/{noticeId}/acknowledgements';
-  static const noticeAuditLogs = '/api/v1/notices/{noticeId}/audit-logs';
 }
 
 class NoticeBackendContract {
   const NoticeBackendContract._();
 
-  static const createPayloadExample = {
-    'title': '300 Level Software Engineering briefing',
-    'body': 'All concerned students should attend the briefing by 10:00am.',
-    'scope': 'COHORT',
-    'audience': 'STUDENTS',
-    'courseCode': null,
-    'schoolId': 'school-kasu',
-    'departmentId': 'dept-computing',
-    'programmeId': 'bsc-software-engineering',
-    'targetLevel': 300,
-    'targetSemester': 1,
-    'targetCohortKey': 'cohort-bsc-se-2023-regular',
-    'priority': 1,
-    'pinned': true,
-    'requiresAcknowledgement': true,
-    'reference': 'EXAM-OFFICE/2026/001',
-    'expiresAt': '2026-06-20T23:59:59Z',
-  };
-
-  static const responseExample = {
+  static const studentVisibleNoticeResponseExample = {
     'id': 'notice-001',
     'title': '300 Level Software Engineering briefing',
     'body': 'All concerned students should attend the briefing by 10:00am.',
@@ -44,9 +18,6 @@ class NoticeBackendContract {
     'createdAt': '2026-06-13T10:00:00Z',
     'priority': 1,
     'status': 'PUBLISHED',
-    'authorId': 'exam-officer-001',
-    'authorName': 'Exam Office',
-    'authorRole': 'EXAM_OFFICER',
     'expiresAt': '2026-06-20T23:59:59Z',
     'pinned': true,
     'requiresAcknowledgement': true,
@@ -61,7 +32,6 @@ class NoticeBackendContract {
   };
 
   static const acknowledgePayloadExample = {
-    'studentId': 'student-2023-c-seng-0400',
     'acknowledgedAt': '2026-06-13T11:15:00Z',
     'deviceId': 'optional-device-id',
   };
@@ -90,7 +60,6 @@ WHERE n.status = 'PUBLISHED'
   AND (n.expires_at IS NULL OR n.expires_at > NOW())
   AND n.audience IN ('STUDENTS', 'ALL')
   AND (
-    -- General notices for all students.
     (
       n.scope IN ('SCHOOL', 'EXAM')
       AND n.school_id IS NULL
@@ -102,7 +71,6 @@ WHERE n.status = 'PUBLISHED'
       AND n.course_code IS NULL
     )
     OR
-    -- Targeted notices: every non-null target must match.
     (
       (n.school_id IS NULL OR n.school_id = :student_school_id)
       AND (n.department_id IS NULL OR n.department_id = :student_department_id)
@@ -115,35 +83,4 @@ WHERE n.status = 'PUBLISHED'
   )
 ORDER BY n.pinned DESC, n.priority DESC, n.created_at DESC;
 ''';
-
-  static const rolePermissions = {
-    'LECTURER': [
-      'Create and publish course notices for assigned courses only.',
-      'Target notices by course, level, semester, department, programme, or cohort only where the lecturer is authorized.',
-      'Archive own notices subject to institution policy.',
-    ],
-    'EXAM_OFFICER': [
-      'Create and publish school, exam, department, programme, level, cohort, and course notices.',
-      'View acknowledgement reports for notices created by the exam office.',
-      'Archive or update official exam notices.',
-    ],
-    'ADMIN': [
-      'Manage all notice scopes and audit logs.',
-      'Override or archive notices according to institutional policy.',
-    ],
-    'STUDENT': [
-      'Read only notices visible to their authenticated profile.',
-      'Acknowledge notices that require acknowledgement.',
-      'Cannot create or publish notices.',
-    ],
-  };
-
-  static const auditEvents = [
-    'NOTICE_CREATED',
-    'NOTICE_UPDATED',
-    'NOTICE_PUBLISHED',
-    'NOTICE_ARCHIVED',
-    'NOTICE_ACKNOWLEDGED',
-    'NOTICE_VISIBILITY_QUERY',
-  ];
 }
