@@ -32,4 +32,22 @@ abstract class Routes {
   static const liveClassHistory = '/live-sessions/history';
   static const liveSessionReplay = '/live-sessions/replay';
   static const liveChiefOverview = '/live-sessions/chief-overview';
+
+  // Lecturer portal routes.
+  static const lecturerLiveSessions = '/lecturer/live-sessions';
+  static const lecturerExams = '/lecturer/exams';
+  static const lecturerResults = '/lecturer/results';
+  static const lecturerNotifications = '/lecturer/notifications';
+
+  // Exam officer portal routes.
+  static const examOfficerLiveSessions = '/exam-officer/live-sessions';
+  static const examOfficerExams = '/exam-officer/exams';
+  static const examOfficerResults = '/exam-officer/results';
+  static const examOfficerNotifications = '/exam-officer/notifications';
+
+  // Invigilator portal routes.
+  static const invigilatorLiveSessions = '/invigilator/live-sessions';
+  static const invigilatorExams = '/invigilator/exams';
+  static const invigilatorResults = '/invigilator/results';
+  static const invigilatorNotifications = '/invigilator/notifications';
 }
