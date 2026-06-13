@@ -37,12 +37,13 @@ class NoticeboardController extends GetxController {
     final bmOnly = showBookmarkedOnly.value;
 
     return notices.where((n) {
+      if (n.isExpired || !n.isPublished) return false;
+
       final matchCourse = course == null
           ? true
-          : (n.scope == NoticeScope.course && n.courseCode == course);
-
+          : n.scope != NoticeScope.course || n.courseCode == course;
       if (!matchCourse) return false;
-      if (n.isExpired || !n.isPublished) return false;
+
       if (bmOnly && !NoticeStorage.isBookmarked(n.id)) return false;
       return true;
     }).toList();
