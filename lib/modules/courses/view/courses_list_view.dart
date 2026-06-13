@@ -59,6 +59,7 @@ class CoursesListView extends GetView<CoursesController> {
                     child: _QuickCourseActions(
                       onLive: () => Get.toNamed(Routes.liveSessions),
                       onCalendar: () => Get.toNamed(Routes.timetable),
+                      onRecord: () => Get.toNamed(Routes.academicRecord),
                       onReceipts: () => Get.toNamed(Routes.results),
                     ),
                   ),
@@ -175,7 +176,7 @@ class _LearningHubHeader extends StatelessWidget {
         ]),
         const SizedBox(height: 10),
         Text(
-          'Courses, materials, assessments and learning tools organized in one student workspace.',
+          'Courses, academic record, materials, assessments and learning tools organized in one student workspace.',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700, height: 1.25),
         ),
         const SizedBox(height: 14),
@@ -265,9 +266,10 @@ class _PriorityStrip extends StatelessWidget {
 }
 
 class _QuickCourseActions extends StatelessWidget {
-  const _QuickCourseActions({required this.onLive, required this.onCalendar, required this.onReceipts});
+  const _QuickCourseActions({required this.onLive, required this.onCalendar, required this.onRecord, required this.onReceipts});
   final VoidCallback onLive;
   final VoidCallback onCalendar;
+  final VoidCallback onRecord;
   final VoidCallback onReceipts;
 
   @override
@@ -276,6 +278,8 @@ class _QuickCourseActions extends StatelessWidget {
       Expanded(child: _MiniAction(icon: Icons.live_tv_outlined, label: 'Live', onTap: onLive)),
       const SizedBox(width: 8),
       Expanded(child: _MiniAction(icon: Icons.calendar_month_outlined, label: 'Calendar', onTap: onCalendar)),
+      const SizedBox(width: 8),
+      Expanded(child: _MiniAction(icon: Icons.school_outlined, label: 'Record', onTap: onRecord)),
       const SizedBox(width: 8),
       Expanded(child: _MiniAction(icon: Icons.receipt_long_outlined, label: 'Receipts', onTap: onReceipts)),
     ]);
@@ -295,7 +299,7 @@ class _MiniAction extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         decoration: BoxDecoration(
           color: cs.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(18),
@@ -304,7 +308,7 @@ class _MiniAction extends StatelessWidget {
         child: Column(children: [
           Icon(icon, color: cs.primary),
           const SizedBox(height: 6),
-          Text(label, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 12)),
+          Text(label, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 11)),
         ]),
       ),
     );
@@ -345,9 +349,7 @@ class _InfoBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: const Color(0xFFF59E0B).withValues(alpha: 0.24),
-        ),
+        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.24)),
       ),
       child: Row(
         children: [
@@ -356,10 +358,7 @@ class _InfoBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: TextStyle(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
             ),
           ),
           TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -384,34 +383,20 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.menu_book_outlined,
-              size: 48,
-              color: cs.primary.withValues(alpha: 0.8),
-            ),
+            Icon(Icons.menu_book_outlined, size: 48, color: cs.primary.withValues(alpha: 0.8)),
             const SizedBox(height: 12),
             Text(
               'No courses available right now.',
-              style: TextStyle(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-              ),
+              style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800, fontSize: 18),
             ),
             const SizedBox(height: 8),
             Text(
               'The app will keep your demo path safe until backend data is ready.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.7),
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7), fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => onReload(),
-              child: const Text('Reload'),
-            ),
+            FilledButton(onPressed: () => onReload(), child: const Text('Reload')),
           ],
         ),
       ),
