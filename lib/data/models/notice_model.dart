@@ -4,6 +4,7 @@ class NoticeScope {
   static const String department = 'DEPARTMENT';
   static const String programme = 'PROGRAMME';
   static const String level = 'LEVEL';
+  static const String cohort = 'COHORT';
   static const String exam = 'EXAM';
 }
 
@@ -45,6 +46,7 @@ class NoticeModel {
     this.programmeId,
     this.targetLevel,
     this.targetSemester,
+    this.targetCohortKey,
   });
 
   final String id;
@@ -69,15 +71,29 @@ class NoticeModel {
   final String? programmeId;
   final int? targetLevel;
   final int? targetSemester;
+  final String? targetCohortKey;
 
   bool get isImportant => priority > 0;
   bool get isPublished => status == NoticeStatus.published;
   bool get isExpired => expiresAt != null && DateTime.now().isAfter(expiresAt!);
 
-  bool matchesLevel({int? level, int? semester}) {
+  bool matchesAcademicTarget({
+    int? level,
+    int? semester,
+    String? departmentId,
+    String? programmeId,
+    String? cohortKey,
+  }) {
     final levelOk = targetLevel == null || targetLevel == level;
     final semesterOk = targetSemester == null || targetSemester == semester;
-    return levelOk && semesterOk;
+    final departmentOk = this.departmentId == null || this.departmentId == departmentId;
+    final programmeOk = this.programmeId == null || this.programmeId == programmeId;
+    final cohortOk = targetCohortKey == null || targetCohortKey == cohortKey;
+    return levelOk && semesterOk && departmentOk && programmeOk && cohortOk;
+  }
+
+  bool matchesLevel({int? level, int? semester}) {
+    return matchesAcademicTarget(level: level, semester: semester);
   }
 
   NoticeModel copyWith({
@@ -103,6 +119,7 @@ class NoticeModel {
     String? programmeId,
     int? targetLevel,
     int? targetSemester,
+    String? targetCohortKey,
   }) {
     return NoticeModel(
       id: id ?? this.id,
@@ -128,6 +145,7 @@ class NoticeModel {
       programmeId: programmeId ?? this.programmeId,
       targetLevel: targetLevel ?? this.targetLevel,
       targetSemester: targetSemester ?? this.targetSemester,
+      targetCohortKey: targetCohortKey ?? this.targetCohortKey,
     );
   }
 
@@ -155,6 +173,7 @@ class NoticeModel {
       'programmeId': programmeId,
       'targetLevel': targetLevel,
       'targetSemester': targetSemester,
+      'targetCohortKey': targetCohortKey,
     };
   }
 
@@ -184,6 +203,7 @@ class NoticeModel {
       programmeId: map['programmeId']?.toString(),
       targetLevel: _intOrNull(map['targetLevel']),
       targetSemester: _intOrNull(map['targetSemester']),
+      targetCohortKey: map['targetCohortKey']?.toString(),
     );
   }
 
