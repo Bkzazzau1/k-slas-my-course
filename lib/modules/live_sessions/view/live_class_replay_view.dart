@@ -171,7 +171,7 @@ class _ReplayPlayerCard extends StatelessWidget {
         const SizedBox(height: 12),
         Row(children: [
           IconButton.filled(onPressed: replayAvailable ? onPlayPause : null, icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded)),
-          Expanded(child: Slider(value: progress.clamp(0.0, 1.0), onChanged: replayAvailable ? onSeek : null)),
+          Expanded(child: Slider(value: progress.clamp(0.0, 1.0).toDouble(), onChanged: replayAvailable ? onSeek : null)),
           Text(_progressLabel(session.durationMinutes, progress), style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w800)),
         ]),
       ]),
