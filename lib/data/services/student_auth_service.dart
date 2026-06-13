@@ -77,6 +77,8 @@ class StudentAuthService {
         schoolName: current?.schoolName ?? 'K-SLAS',
         departmentId: current?.departmentId ?? '',
         departmentName: current?.departmentName ?? '',
+        programmeId: user['programme_id']?.toString() ?? current?.programmeId,
+        programmeName: user['programme_name']?.toString() ?? current?.programmeName,
         level: current?.level ?? 0,
         semester: current?.semester ?? 0,
         selectedCourses: current?.selectedCourses ?? const [],
