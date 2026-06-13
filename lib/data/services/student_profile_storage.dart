@@ -20,6 +20,8 @@ class StudentProfileStorage {
         schoolName: m["schoolName"],
         departmentId: m["departmentId"],
         departmentName: m["departmentName"],
+        programmeId: m["programmeId"],
+        programmeName: m["programmeName"],
         level: m["level"],
         semester: m["semester"],
         selectedCourses: (m["selectedCourses"] as List)
@@ -42,6 +44,8 @@ class StudentProfileStorage {
       "schoolName": p.schoolName,
       "departmentId": p.departmentId,
       "departmentName": p.departmentName,
+      "programmeId": p.programmeId,
+      "programmeName": p.programmeName,
       "level": p.level,
       "semester": p.semester,
       "selectedCourses": p.selectedCourses,
