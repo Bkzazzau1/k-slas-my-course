@@ -10,6 +10,7 @@ import '../../../data/models/course_model.dart';
 import '../../../data/services/course_ui_preferences_service.dart';
 import '../widgets/assessments_tab.dart';
 import '../widgets/chat_tab.dart';
+import '../widgets/course_info_dialog.dart';
 import '../widgets/live_class_tab.dart';
 import '../widgets/past_questions_tab.dart';
 import '../widgets/revision_tab.dart';
@@ -60,6 +61,10 @@ class _CourseDetailViewState extends State<CourseDetailView> with SingleTickerPr
     );
   }
 
+  void _showCourseInfo(CourseModel course) {
+    Get.dialog(CourseInfoDialog(course: course));
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = course;
@@ -75,6 +80,7 @@ class _CourseDetailViewState extends State<CourseDetailView> with SingleTickerPr
                 course: c,
                 collapsed: _coursePanelCollapsed,
                 onBack: () => Get.back(),
+                onInfo: () => _showCourseInfo(c),
                 onToggleCollapsed: () => _setCoursePanelCollapsed(!_coursePanelCollapsed),
                 onStudy: () => _tabController.animateTo(0),
                 onAskAi: () => Get.toNamed(Routes.chat, arguments: {'course': c}),
@@ -293,6 +299,7 @@ class _CourseHeroHeader extends StatelessWidget {
     required this.course,
     required this.collapsed,
     required this.onBack,
+    required this.onInfo,
     required this.onToggleCollapsed,
     required this.onStudy,
     required this.onAskAi,
@@ -306,6 +313,7 @@ class _CourseHeroHeader extends StatelessWidget {
   final CourseModel course;
   final bool collapsed;
   final VoidCallback onBack;
+  final VoidCallback onInfo;
   final VoidCallback onToggleCollapsed;
   final VoidCallback onStudy;
   final VoidCallback onAskAi;
@@ -336,6 +344,8 @@ class _CourseHeroHeader extends StatelessWidget {
           ])),
           const SizedBox(width: 10),
           _ProgressPill(progress: course.progress),
+          const SizedBox(width: 8),
+          _InfoBtn(onTap: onInfo),
           const SizedBox(width: 8),
           _FoldBtn(collapsed: collapsed, onTap: onToggleCollapsed),
         ]),
@@ -371,6 +381,28 @@ class _CourseHeroHeader extends StatelessWidget {
           }),
         ],
       ]),
+    );
+  }
+}
+
+class _InfoBtn extends StatelessWidget {
+  const _InfoBtn({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Course info',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.20))),
+          child: const Icon(Icons.info_outline_rounded, color: Colors.white),
+        ),
+      ),
     );
   }
 }
