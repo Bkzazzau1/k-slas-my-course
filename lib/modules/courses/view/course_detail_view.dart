@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:get/get.dart';
 import '../../../app/routes/app_routes.dart';
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/course_model.dart';
+import '../../../data/services/course_ui_preferences_service.dart';
 import '../widgets/assessments_tab.dart';
 import '../widgets/chat_tab.dart';
 import '../widgets/live_class_tab.dart';
@@ -35,6 +37,10 @@ class _CourseDetailViewState extends State<CourseDetailView> with SingleTickerPr
     super.initState();
     final args = (Get.arguments ?? {}) as Map;
     final initialTab = (args['initialTab'] as int?)?.clamp(0, 6) ?? 0;
+    final initialCourse = args['course'] as CourseModel?;
+    _coursePanelCollapsed = initialCourse == null
+        ? false
+        : CourseUiPreferencesService.isCoursePanelCollapsed(initialCourse.code);
     _tabController = TabController(length: 7, vsync: this, initialIndex: initialTab);
   }
 
@@ -42,6 +48,16 @@ class _CourseDetailViewState extends State<CourseDetailView> with SingleTickerPr
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _setCoursePanelCollapsed(bool collapsed) {
+    setState(() => _coursePanelCollapsed = collapsed);
+    unawaited(
+      CourseUiPreferencesService.setCoursePanelCollapsed(
+        courseCode: course.code,
+        collapsed: collapsed,
+      ),
+    );
   }
 
   @override
@@ -59,7 +75,7 @@ class _CourseDetailViewState extends State<CourseDetailView> with SingleTickerPr
                 course: c,
                 collapsed: _coursePanelCollapsed,
                 onBack: () => Get.back(),
-                onToggleCollapsed: () => setState(() => _coursePanelCollapsed = !_coursePanelCollapsed),
+                onToggleCollapsed: () => _setCoursePanelCollapsed(!_coursePanelCollapsed),
                 onStudy: () => _tabController.animateTo(0),
                 onAskAi: () => Get.toNamed(Routes.chat, arguments: {'course': c}),
                 onCbt: () => _tabController.animateTo(3),
@@ -92,7 +108,7 @@ class _CourseDetailViewState extends State<CourseDetailView> with SingleTickerPr
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: _FoldedCoursePanelStrip(
                   controller: _tabController,
-                  onUnfold: () => setState(() => _coursePanelCollapsed = false),
+                  onUnfold: () => _setCoursePanelCollapsed(false),
                 ),
               ),
             ),
