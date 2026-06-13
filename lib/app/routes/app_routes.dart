@@ -7,6 +7,7 @@ abstract class Routes {
   static const courses = '/courses';
   static const courseDetail = '/courses/detail';
   static const academicRecord = '/courses/academic-record';
+  static const courseRegistration = '/courses/registration';
   static const chat = '/chat';
   static const practiceSetup = '/practice/setup';
   static const practiceSession = '/practice/session';
