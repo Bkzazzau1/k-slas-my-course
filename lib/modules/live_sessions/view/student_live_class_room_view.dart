@@ -7,6 +7,7 @@ import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/live_session_models.dart';
 import '../../../data/services/live_class_student_notes_service.dart';
 import '../../../data/services/student_profile_storage.dart';
+import '../../../data/services/submission_history_service.dart';
 import '../controller/live_sessions_controller.dart';
 import '../live_session_utils.dart';
 import '../widgets/live_session_video_surface.dart';
@@ -33,6 +34,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
   Timer? refreshTimer;
   _StudentRoomPanel activePanel = _StudentRoomPanel.chat;
   bool handRaised = false;
+  bool attendanceSaved = false;
 
   @override
   void initState() {
@@ -100,8 +102,47 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
     return LiveClassStudentNotesService.save(sessionId: sessionId, note: value);
   }
 
-  void _leaveClass() {
-    Get.back<void>();
+  Future<void> _leaveClass() async {
+    await _saveNotes(noteController.text);
+    await _saveAttendanceReceipt();
+    if (mounted) Get.back<void>();
+  }
+
+  Future<void> _saveAttendanceReceipt() async {
+    if (attendanceSaved) return;
+    final room = controller.room.value;
+    if (room == null || room.session.id != sessionId) return;
+    final participant = _currentParticipant(room);
+    final minutes = participant?.attendanceMinutesAt(DateTime.now()) ?? 0;
+    final percent = _attendancePercentage(minutes, room.session.durationMinutes);
+    await SubmissionHistoryService.saveLiveClassAttendance(
+      session: room.session,
+      receiptNumber: _attendanceReceipt(room.session),
+      attendanceMinutes: minutes,
+      attendancePercentage: percent,
+      status: 'Attendance Recorded',
+    );
+    attendanceSaved = true;
+  }
+
+  int _attendancePercentage(int minutes, int durationMinutes) {
+    if (durationMinutes <= 0) return 0;
+    final pct = ((minutes / durationMinutes) * 100).round();
+    if (pct < 0) return 0;
+    if (pct > 100) return 100;
+    return pct;
+  }
+
+  String _attendanceReceipt(LiveSessionModel session) {
+    final course = _cleanId(session.courseCode);
+    final sessionPart = _cleanId(session.id);
+    final student = _cleanId(registrationNumber);
+    return 'LIVE-$course-$sessionPart-$student';
+  }
+
+  String _cleanId(String value) {
+    final cleaned = value.replaceAll(RegExp(r'[^A-Za-z0-9]+'), '').toUpperCase();
+    return cleaned.isEmpty ? 'STUDENT' : cleaned;
   }
 
   LiveSessionParticipant? _currentParticipant(LiveSessionRoomState room) {
@@ -148,7 +189,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
                 child: _RoomHeader(
                   room: room,
                   participant: participant,
-                  onLeave: _leaveClass,
+                  onLeave: () => unawaited(_leaveClass()),
                 ),
               ),
               Expanded(
