@@ -24,7 +24,8 @@ class NoticePublishingPortalView extends StatefulWidget {
   final bool allowExamScope;
 
   @override
-  State<NoticePublishingPortalView> createState() => _NoticePublishingPortalViewState();
+  State<NoticePublishingPortalView> createState() =>
+      _NoticePublishingPortalViewState();
 }
 
 class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView> {
@@ -35,6 +36,8 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
 
   String _scope = NoticeScope.course;
   String _audience = NoticeAudience.students;
+  int? _targetLevel;
+  int? _targetSemester;
   bool _important = false;
   bool _pinned = false;
   bool _requiresAcknowledgement = false;
@@ -52,6 +55,7 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
   List<String> get _allowedScopes {
     return [
       if (widget.allowSchoolScope) NoticeScope.school,
+      NoticeScope.level,
       NoticeScope.course,
       if (widget.allowExamScope) NoticeScope.exam,
     ];
@@ -69,6 +73,10 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
       _snack('Course required', 'Enter a course code for course notices.');
       return;
     }
+    if (_scope == NoticeScope.level && _targetLevel == null) {
+      _snack('Level required', 'Choose the student level for this notice.');
+      return;
+    }
 
     final notice = NoticeModel(
       id: 'notice-${DateTime.now().microsecondsSinceEpoch}',
@@ -84,10 +92,15 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
       authorId: widget.authorRole.toLowerCase().replaceAll(' ', '-'),
       authorName: widget.defaultSource,
       authorRole: widget.authorRole,
-      expiresAt: _expiresInSevenDays ? DateTime.now().add(const Duration(days: 7)) : null,
+      expiresAt:
+          _expiresInSevenDays ? DateTime.now().add(const Duration(days: 7)) : null,
       pinned: _pinned,
       requiresAcknowledgement: _requiresAcknowledgement,
-      reference: _referenceController.text.trim().isEmpty ? null : _referenceController.text.trim(),
+      reference: _referenceController.text.trim().isEmpty
+          ? null
+          : _referenceController.text.trim(),
+      targetLevel: _targetLevel,
+      targetSemester: _targetSemester,
     );
 
     await NoticeStorage.savePublishedNotice(notice);
@@ -100,6 +113,8 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
       _pinned = false;
       _requiresAcknowledgement = false;
       _expiresInSevenDays = false;
+      _targetLevel = null;
+      _targetSemester = null;
     });
     _snack('Notice published', 'The notice is now available to the selected audience.');
   }
@@ -136,12 +151,21 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
               allowedScopes: _allowedScopes,
               scope: _scope,
               audience: _audience,
+              targetLevel: _targetLevel,
+              targetSemester: _targetSemester,
               important: _important,
               pinned: _pinned,
               requiresAcknowledgement: _requiresAcknowledgement,
               expiresInSevenDays: _expiresInSevenDays,
-              onScopeChanged: (value) => setState(() => _scope = value),
+              onScopeChanged: (value) => setState(() {
+                _scope = value;
+                if (value == NoticeScope.level && _targetLevel == null) {
+                  _targetLevel = 100;
+                }
+              }),
               onAudienceChanged: (value) => setState(() => _audience = value),
+              onLevelChanged: (value) => setState(() => _targetLevel = value),
+              onSemesterChanged: (value) => setState(() => _targetSemester = value),
               onImportantChanged: (value) => setState(() => _important = value),
               onPinnedChanged: (value) => setState(() => _pinned = value),
               onAckChanged: (value) => setState(() => _requiresAcknowledgement = value),
@@ -151,7 +175,11 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
             const SizedBox(height: 14),
             Text(
               'Recently published',
-              style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 17),
+              style: TextStyle(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w900,
+                fontSize: 17,
+              ),
             ),
             const SizedBox(height: 10),
             if (notices.isEmpty)
@@ -213,18 +241,32 @@ class _NoticePublisherHero extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 22,
+                  ),
                 ),
               ),
               const Icon(Icons.campaign_outlined, color: Colors.white),
             ],
           ),
           const SizedBox(height: 10),
-          Text(roleName, style: TextStyle(color: Colors.white.withValues(alpha: 0.86), fontWeight: FontWeight.w900)),
+          Text(
+            roleName,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.86),
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 8),
           Text(
-            'Publish official notices from this role portal only. Students will only read approved notices from their noticeboard.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700, height: 1.30),
+            'Publish official notices from this role portal only. Notices may be targeted by course, level, semester, or the whole school.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.90),
+              fontWeight: FontWeight.w700,
+              height: 1.30,
+            ),
           ),
         ],
       ),
@@ -241,12 +283,16 @@ class _PublisherFormCard extends StatelessWidget {
     required this.allowedScopes,
     required this.scope,
     required this.audience,
+    required this.targetLevel,
+    required this.targetSemester,
     required this.important,
     required this.pinned,
     required this.requiresAcknowledgement,
     required this.expiresInSevenDays,
     required this.onScopeChanged,
     required this.onAudienceChanged,
+    required this.onLevelChanged,
+    required this.onSemesterChanged,
     required this.onImportantChanged,
     required this.onPinnedChanged,
     required this.onAckChanged,
@@ -261,12 +307,16 @@ class _PublisherFormCard extends StatelessWidget {
   final List<String> allowedScopes;
   final String scope;
   final String audience;
+  final int? targetLevel;
+  final int? targetSemester;
   final bool important;
   final bool pinned;
   final bool requiresAcknowledgement;
   final bool expiresInSevenDays;
   final ValueChanged<String> onScopeChanged;
   final ValueChanged<String> onAudienceChanged;
+  final ValueChanged<int?> onLevelChanged;
+  final ValueChanged<int?> onSemesterChanged;
   final ValueChanged<bool> onImportantChanged;
   final ValueChanged<bool> onPinnedChanged;
   final ValueChanged<bool> onAckChanged;
@@ -287,14 +337,20 @@ class _PublisherFormCard extends StatelessWidget {
         children: [
           TextField(
             controller: titleController,
-            decoration: const InputDecoration(labelText: 'Notice title', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Notice title',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: bodyController,
             minLines: 5,
             maxLines: 8,
-            decoration: const InputDecoration(labelText: 'Notice details', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+              labelText: 'Notice details',
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -302,7 +358,10 @@ class _PublisherFormCard extends StatelessWidget {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   value: scope,
-                  decoration: const InputDecoration(labelText: 'Scope', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Scope',
+                    border: OutlineInputBorder(),
+                  ),
                   items: allowedScopes
                       .map((item) => DropdownMenuItem(value: item, child: Text(_label(item))))
                       .toList(),
@@ -315,7 +374,10 @@ class _PublisherFormCard extends StatelessWidget {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   value: audience,
-                  decoration: const InputDecoration(labelText: 'Audience', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Audience',
+                    border: OutlineInputBorder(),
+                  ),
                   items: const [
                     DropdownMenuItem(value: NoticeAudience.students, child: Text('Students')),
                     DropdownMenuItem(value: NoticeAudience.all, child: Text('All')),
@@ -332,9 +394,53 @@ class _PublisherFormCard extends StatelessWidget {
             TextField(
               controller: courseController,
               textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(labelText: 'Course code', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Course code',
+                border: OutlineInputBorder(),
+              ),
             ),
           ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<int?>(
+                  value: targetLevel,
+                  decoration: const InputDecoration(
+                    labelText: 'Target level',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All levels')),
+                    DropdownMenuItem(value: 100, child: Text('100 Level')),
+                    DropdownMenuItem(value: 200, child: Text('200 Level')),
+                    DropdownMenuItem(value: 300, child: Text('300 Level')),
+                    DropdownMenuItem(value: 400, child: Text('400 Level')),
+                    DropdownMenuItem(value: 500, child: Text('500 Level')),
+                    DropdownMenuItem(value: 600, child: Text('600 Level')),
+                  ],
+                  onChanged: onLevelChanged,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<int?>(
+                  value: targetSemester,
+                  decoration: const InputDecoration(
+                    labelText: 'Semester',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('All semesters')),
+                    DropdownMenuItem(value: 1, child: Text('1st semester')),
+                    DropdownMenuItem(value: 2, child: Text('2nd semester')),
+                    DropdownMenuItem(value: 3, child: Text('3rd semester')),
+                  ],
+                  onChanged: onSemesterChanged,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           TextField(
             controller: referenceController,
@@ -392,6 +498,8 @@ class _PublisherFormCard extends StatelessWidget {
         return 'Department';
       case NoticeScope.programme:
         return 'Programme';
+      case NoticeScope.level:
+        return 'Level';
       case NoticeScope.course:
       default:
         return 'Course';
@@ -428,7 +536,7 @@ class _PublishedNoticeTile extends StatelessWidget {
                 Text(notice.title, style: const TextStyle(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 4),
                 Text(
-                  '${notice.scope}${notice.courseCode == null ? '' : ' • ${notice.courseCode}'} • ${notice.status}',
+                  '${notice.scope}${notice.courseCode == null ? '' : ' • ${notice.courseCode}'} • ${_targetLabel(notice)} • ${notice.status}',
                   style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700, fontSize: 12),
                 ),
               ],
@@ -439,6 +547,12 @@ class _PublishedNoticeTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _targetLabel(NoticeModel notice) {
+    final level = notice.targetLevel == null ? 'All levels' : '${notice.targetLevel} Level';
+    final semester = notice.targetSemester == null ? 'All semesters' : 'Semester ${notice.targetSemester}';
+    return '$level • $semester';
   }
 }
 
