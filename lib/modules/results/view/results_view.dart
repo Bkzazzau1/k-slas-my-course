@@ -38,6 +38,7 @@ class _ResultsViewState extends State<ResultsView> {
   Widget build(BuildContext context) {
     final graded = records.where((e) => e.gradingType == GradingType.graded).length;
     final proctored = records.where((e) => e.proctored).length;
+    final liveAttendance = records.where((e) => e.isLiveClassAttendance).length;
     final hasAny = records.isNotEmpty || drafts.isNotEmpty || pendingSync.isNotEmpty;
 
     return Scaffold(
@@ -53,6 +54,7 @@ class _ResultsViewState extends State<ResultsView> {
                 proctored: proctored,
                 drafts: drafts.length,
                 pending: pendingSync.length,
+                liveAttendance: liveAttendance,
               ),
             ),
             Expanded(
@@ -71,26 +73,17 @@ class _ResultsViewState extends State<ResultsView> {
                           if (drafts.isNotEmpty) ...[
                             _SectionLabel(title: 'Offline drafts', subtitle: 'Saved locally. Continue when ready.'),
                             const SizedBox(height: 8),
-                            ...drafts.map((draft) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: _DraftCard(draft: draft),
-                                )),
+                            ...drafts.map((draft) => Padding(padding: const EdgeInsets.only(bottom: 12), child: _DraftCard(draft: draft))),
                           ],
                           if (pendingSync.isNotEmpty) ...[
                             _SectionLabel(title: 'Pending sync', subtitle: 'Waiting to upload when network is available.'),
                             const SizedBox(height: 8),
-                            ...pendingSync.map((item) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: _PendingSyncCard(item: item),
-                                )),
+                            ...pendingSync.map((item) => Padding(padding: const EdgeInsets.only(bottom: 12), child: _PendingSyncCard(item: item))),
                           ],
                           if (records.isNotEmpty) ...[
-                            _SectionLabel(title: 'Submission receipts', subtitle: 'Completed submissions and receipt numbers.'),
+                            _SectionLabel(title: 'Receipts and attendance history', subtitle: 'Completed submissions, live-class attendance, and receipt numbers.'),
                             const SizedBox(height: 8),
-                            ...records.map((record) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: _SubmissionCard(record: record),
-                                )),
+                            ...records.map((record) => Padding(padding: const EdgeInsets.only(bottom: 12), child: _SubmissionCard(record: record))),
                           ],
                         ],
                       ),
@@ -104,66 +97,39 @@ class _ResultsViewState extends State<ResultsView> {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({
-    required this.total,
-    required this.graded,
-    required this.proctored,
-    required this.drafts,
-    required this.pending,
-  });
+  const _Header({required this.total, required this.graded, required this.proctored, required this.drafts, required this.pending, required this.liveAttendance});
   final int total;
   final int graded;
   final int proctored;
   final int drafts;
   final int pending;
+  final int liveAttendance;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              IconButton.filledTonal(
-                onPressed: () => Get.back<void>(),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Submission & Offline Center',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20),
-                ),
-              ),
-              const Icon(Icons.cloud_done_rounded, color: Colors.white),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Your receipts, saved drafts, and pending sync items are kept here.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _HeroPill(label: '$total receipts'),
-              _HeroPill(label: '$drafts drafts'),
-              _HeroPill(label: '$pending pending sync'),
-              _HeroPill(label: '$graded graded'),
-              _HeroPill(label: '$proctored proctored'),
-            ],
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [cs.primary, cs.secondary])),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          IconButton.filledTonal(onPressed: () => Get.back<void>(), icon: const Icon(Icons.arrow_back_ios_new_rounded)),
+          const SizedBox(width: 10),
+          const Expanded(child: Text('Submission & Offline Center', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20))),
+          const Icon(Icons.cloud_done_rounded, color: Colors.white),
+        ]),
+        const SizedBox(height: 12),
+        Text('Your receipts, live-class attendance, saved drafts, and pending sync items are kept here.', style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700)),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _HeroPill(label: '$total receipts'),
+          _HeroPill(label: '$liveAttendance attendance'),
+          _HeroPill(label: '$drafts drafts'),
+          _HeroPill(label: '$pending pending sync'),
+          _HeroPill(label: '$graded graded'),
+          _HeroPill(label: '$proctored proctored'),
+        ]),
+      ]),
     );
   }
 }
@@ -176,11 +142,7 @@ class _HeroPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.17),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-      ),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.17), borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.white.withValues(alpha: 0.22))),
       child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
     );
   }
@@ -214,21 +176,15 @@ class _EmptyCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return _glass(
       context,
-      child: Column(
-        children: [
-          Icon(Icons.cloud_off_rounded, size: 46, color: cs.primary),
-          const SizedBox(height: 12),
-          const Text('No local record yet', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-          const SizedBox(height: 8),
-          Text(
-            'Drafts, pending sync items, and submission receipts will appear here automatically.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(onPressed: onStart, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Start assessment')),
-        ],
-      ),
+      child: Column(children: [
+        Icon(Icons.cloud_off_rounded, size: 46, color: cs.primary),
+        const SizedBox(height: 12),
+        const Text('No local record yet', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+        const SizedBox(height: 8),
+        Text('Drafts, pending sync items, live-class attendance, and submission receipts will appear here automatically.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600)),
+        const SizedBox(height: 14),
+        FilledButton.icon(onPressed: onStart, icon: const Icon(Icons.play_arrow_rounded), label: const Text('Start assessment')),
+      ]),
     );
   }
 }
@@ -239,9 +195,7 @@ class _DraftCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final remaining = draft.secondsLeft <= 0
-        ? 'Untimed / expired'
-        : '${(draft.secondsLeft ~/ 60).toString().padLeft(2, '0')}:${(draft.secondsLeft % 60).toString().padLeft(2, '0')} left';
+    final remaining = draft.secondsLeft <= 0 ? 'Untimed / expired' : '${(draft.secondsLeft ~/ 60).toString().padLeft(2, '0')}:${(draft.secondsLeft % 60).toString().padLeft(2, '0')} left';
     return _glass(
       context,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -257,14 +211,7 @@ class _DraftCard extends StatelessWidget {
         _InfoRow(label: 'Saved', value: _formatDate(draft.savedAt)),
         _InfoRow(label: 'Time', value: remaining),
         const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: () => Get.toNamed('/cbt/setup', arguments: {'courseCode': draft.courseCode}),
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Continue assessment'),
-          ),
-        ),
+        SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => Get.toNamed('/cbt/setup', arguments: {'courseCode': draft.courseCode}), icon: const Icon(Icons.play_arrow_rounded), label: const Text('Continue assessment'))),
       ]),
     );
   }
@@ -301,49 +248,43 @@ class _SubmissionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final statusColor = record.status.contains('Review') || record.status.contains('Warning')
-        ? Colors.orange.shade700
-        : Colors.green.shade700;
+    final isLive = record.isLiveClassAttendance;
+    final statusColor = isLive
+        ? cs.primary
+        : record.status.contains('Review') || record.status.contains('Warning')
+            ? Colors.orange.shade700
+            : Colors.green.shade700;
 
     return _glass(
       context,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.11),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Text('${record.percentage}%', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900, fontSize: 18)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(record.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                  const SizedBox(height: 4),
-                  Text('${record.courseCode} • ${_formatDate(record.submittedAt)}', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.66), fontWeight: FontWeight.w700)),
-                ]),
-              ),
-              _StatusChip(label: record.status, color: statusColor),
-            ],
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 58,
+            height: 58,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(color: (isLive ? cs.secondary : cs.primary).withValues(alpha: 0.11), borderRadius: BorderRadius.circular(18)),
+            child: isLive ? Icon(Icons.live_tv_outlined, color: cs.secondary) : Text('${record.percentage}%', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900, fontSize: 18)),
           ),
-          const SizedBox(height: 12),
-          _InfoRow(label: 'Receipt', value: record.receiptNumber),
-          _InfoRow(label: 'Score', value: record.scoreLabel),
-          _InfoRow(label: 'Mode', value: record.gradingType == GradingType.graded ? 'Graded' : 'Ungraded'),
-          _InfoRow(label: 'Proctoring', value: record.proctored ? 'Proctored' : 'Normal'),
-          if (record.proctored) ...[
-            _InfoRow(label: 'Integrity score', value: record.integrityScore?.toString() ?? 'Not available'),
-            _InfoRow(label: 'Warnings', value: '${record.warningCount}'),
-          ],
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(record.title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+            const SizedBox(height: 4),
+            Text('${record.courseCode} • ${_formatDate(record.submittedAt)}', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.66), fontWeight: FontWeight.w700)),
+          ])),
+          _StatusChip(label: record.status, color: statusColor),
+        ]),
+        const SizedBox(height: 12),
+        _InfoRow(label: 'Receipt', value: record.receiptNumber),
+        _InfoRow(label: isLive ? 'Attendance' : 'Score', value: record.scoreLabel),
+        _InfoRow(label: isLive ? 'Attendance rate' : 'Score rate', value: '${record.percentage}%'),
+        _InfoRow(label: isLive ? 'Record type' : 'Mode', value: isLive ? 'Live Class Attendance' : record.gradingType == GradingType.graded ? 'Graded' : 'Ungraded'),
+        if (!isLive) _InfoRow(label: 'Proctoring', value: record.proctored ? 'Proctored' : 'Normal'),
+        if (record.proctored) ...[
+          _InfoRow(label: 'Integrity score', value: record.integrityScore?.toString() ?? 'Not available'),
+          _InfoRow(label: 'Warnings', value: '${record.warningCount}'),
         ],
-      ),
+      ]),
     );
   }
 }
@@ -357,12 +298,10 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
-          Flexible(child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w900))),
-        ],
-      ),
+      child: Row(children: [
+        Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
+        Flexible(child: Text(value, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.w900))),
+      ]),
     );
   }
 }
@@ -400,13 +339,7 @@ Widget _glass(BuildContext context, {required Widget child}) {
       color: cs.surface,
       borderRadius: BorderRadius.circular(20),
       border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-      boxShadow: [
-        BoxShadow(
-          blurRadius: 18,
-          offset: const Offset(0, 10),
-          color: cs.shadow.withValues(alpha: 0.05),
-        ),
-      ],
+      boxShadow: [BoxShadow(blurRadius: 18, offset: const Offset(0, 10), color: cs.shadow.withValues(alpha: 0.05))],
     ),
     child: child,
   );
