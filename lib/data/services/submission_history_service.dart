@@ -4,6 +4,7 @@ import 'package:get_storage/get_storage.dart';
 
 import '../models/cbt_models.dart';
 import '../models/exam_models.dart';
+import '../models/live_session_models.dart';
 
 class SubmissionHistoryRecord {
   const SubmissionHistoryRecord({
@@ -33,6 +34,8 @@ class SubmissionHistoryRecord {
   final bool proctored;
   final int warningCount;
   final int? integrityScore;
+
+  bool get isLiveClassAttendance => sessionType == SubmissionSessionType.liveClass;
 
   Map<String, dynamic> toJson() => {
         'receiptNumber': receiptNumber,
@@ -71,6 +74,12 @@ class SubmissionHistoryRecord {
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
+}
+
+class SubmissionSessionType {
+  SubmissionSessionType._();
+
+  static const String liveClass = 'live_class';
 }
 
 class SubmissionHistoryService {
@@ -149,6 +158,31 @@ class SubmissionHistoryService {
         proctored: result.deliveryMode == ExamDeliveryMode.remoteProctored,
         warningCount: warningCount,
         integrityScore: integrityScore,
+      ),
+    );
+  }
+
+  static Future<void> saveLiveClassAttendance({
+    required LiveSessionModel session,
+    required String receiptNumber,
+    required int attendanceMinutes,
+    required int attendancePercentage,
+    required String status,
+  }) {
+    return upsert(
+      SubmissionHistoryRecord(
+        receiptNumber: receiptNumber,
+        courseCode: session.courseCode,
+        title: 'Live Class Attendance • ${session.title}',
+        sessionType: SubmissionSessionType.liveClass,
+        gradingType: GradingType.ungraded,
+        status: status,
+        submittedAt: DateTime.now(),
+        scoreLabel: '$attendanceMinutes/${session.durationMinutes} min',
+        percentage: attendancePercentage,
+        proctored: false,
+        warningCount: 0,
+        integrityScore: null,
       ),
     );
   }
