@@ -16,11 +16,13 @@ class CourseRegistrationView extends StatefulWidget {
 
 class _CourseRegistrationViewState extends State<CourseRegistrationView> {
   late Set<String> _selectedElectives;
+  late Set<String> _selectedCarryovers;
 
   @override
   void initState() {
     super.initState();
     _selectedElectives = CourseRegistrationStorage.loadSelectedElectives();
+    _selectedCarryovers = CourseRegistrationStorage.loadSelectedCarryovers();
   }
 
   Future<void> _toggleElective(CourseModel course, bool selected) async {
@@ -32,6 +34,17 @@ class _CourseRegistrationViewState extends State<CourseRegistrationView> {
       }
     });
     await CourseRegistrationStorage.saveSelectedElectives(_selectedElectives);
+  }
+
+  Future<void> _toggleCarryover(CourseModel course, bool selected) async {
+    setState(() {
+      if (selected) {
+        _selectedCarryovers.add(course.code);
+      } else {
+        _selectedCarryovers.remove(course.code);
+      }
+    });
+    await CourseRegistrationStorage.saveSelectedCarryovers(_selectedCarryovers);
   }
 
   Future<void> _submit(CourseRegistrationDraft draft) async {
@@ -48,17 +61,25 @@ class _CourseRegistrationViewState extends State<CourseRegistrationView> {
     );
     await CourseRegistrationStorage.clearDraft();
     if (!mounted) return;
-    setState(() => _selectedElectives = <String>{});
+    setState(() {
+      _selectedElectives = <String>{};
+      _selectedCarryovers = <String>{};
+    });
     Get.snackbar(
-      'Registration submitted',
-      'Your course registration has been saved for approval.',
+      draft.validation.approvalRequired ? 'Submitted for approval' : 'Registration submitted',
+      draft.validation.approvalRequired
+          ? 'Your registration includes carryover/repeat courses and needs academic office confirmation.'
+          : 'Your course registration has been saved for approval.',
       snackPosition: SnackPosition.BOTTOM,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final draft = CourseRegistrationService.buildDraft(_selectedElectives);
+    final draft = CourseRegistrationService.buildDraft(
+      _selectedElectives,
+      selectedCarryoverCodes: _selectedCarryovers,
+    );
     final submittedAt = CourseRegistrationStorage.loadSubmittedAt();
     final submittedCourses = CourseRegistrationStorage.loadSubmittedCourses();
 
@@ -102,13 +123,29 @@ class _CourseRegistrationViewState extends State<CourseRegistrationView> {
                 onChanged: (value) => _toggleElective(course, value),
               ),
             ),
+            if (draft.ruleSet.availableCarryovers.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _SectionHeader(
+                title: 'Carryover / repeat courses',
+                subtitle: 'Select failed, missing, or repeat courses that must be confirmed by the academic office.',
+              ),
+              const SizedBox(height: 10),
+              ...draft.ruleSet.availableCarryovers.map(
+                (course) => _RegistrationCourseCard(
+                  course: course,
+                  selected: _selectedCarryovers.contains(course.code),
+                  locked: false,
+                  onChanged: (value) => _toggleCarryover(course, value),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             _ValidationPanel(validation: draft.validation),
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: () => _submit(draft),
               icon: const Icon(Icons.send_rounded),
-              label: const Text('Submit course registration'),
+              label: Text(draft.validation.approvalRequired ? 'Submit for academic approval' : 'Submit course registration'),
             ),
           ],
         ),
@@ -157,7 +194,7 @@ class _RegistrationHero extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           profile == null
-              ? 'Register valid core and elective courses.'
+              ? 'Register valid core, elective, carryover, and repeat courses.'
               : '${profile.departmentName} • ${profile.level} Level • Semester ${profile.semester}',
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.92),
@@ -170,6 +207,8 @@ class _RegistrationHero extends StatelessWidget {
           _HeroPill(label: ruleSet.academicSession),
           _HeroPill(label: 'Min ${ruleSet.minCreditUnits} credits'),
           _HeroPill(label: 'Max ${ruleSet.maxCreditUnits} credits'),
+          if (ruleSet.availableCarryovers.isNotEmpty)
+            _HeroPill(label: '${ruleSet.availableCarryovers.length} carryover candidate(s)'),
         ]),
       ]),
     );
@@ -227,8 +266,16 @@ class _RegistrationSummary extends StatelessWidget {
           _SummaryTile(label: 'Total credits', value: draft.validation.totalCredits.toString(), icon: Icons.calculate_outlined),
           _SummaryTile(label: 'Core credits', value: draft.validation.coreCredits.toString(), icon: Icons.lock_outline),
           _SummaryTile(label: 'Elective credits', value: draft.validation.electiveCredits.toString(), icon: Icons.tune_rounded),
+          _SummaryTile(label: 'Carryover credits', value: draft.validation.carryoverCredits.toString(), icon: Icons.replay_circle_filled_outlined),
           _SummaryTile(label: 'Selected courses', value: draft.selectedCourses.length.toString(), icon: Icons.library_books_outlined),
         ]),
+        if (draft.validation.approvalRequired) ...[
+          const SizedBox(height: 12),
+          Text(
+            'Academic office confirmation is required because this registration includes carryover/repeat or special approval courses.',
+            style: TextStyle(color: cs.error, fontWeight: FontWeight.w800),
+          ),
+        ],
         if (submittedAt != null) ...[
           const SizedBox(height: 12),
           Text(
@@ -302,7 +349,11 @@ class _RegistrationCourseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tone = course.isCore ? cs.primary : cs.tertiary;
+    final tone = course.isCarryover || course.isRepeat
+        ? cs.error
+        : course.isCore
+            ? cs.primary
+            : cs.tertiary;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(13),
@@ -324,10 +375,21 @@ class _RegistrationCourseCard extends StatelessWidget {
             Wrap(spacing: 7, runSpacing: 7, children: [
               _CoursePill(text: '${course.creditUnits} credits', color: cs.secondary),
               _CoursePill(text: course.isCore ? 'Core' : 'Elective', color: tone),
+              if (course.isCarryover) _CoursePill(text: 'Carryover', color: cs.error),
+              if (course.isRepeat) _CoursePill(text: 'Repeat', color: cs.error),
+              if (course.previousGrade != null) _CoursePill(text: 'Prev ${course.previousGrade}', color: cs.error),
               if (course.level != null) _CoursePill(text: '${course.level} Level', color: cs.primary),
               if (course.semester != null) _CoursePill(text: 'Semester ${course.semester}', color: cs.primary),
               if (locked) _CoursePill(text: 'Compulsory', color: cs.error),
+              if (course.requiresApproval) _CoursePill(text: 'Approval required', color: cs.error),
             ]),
+            if (course.repeatReason != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                course.repeatReason!,
+                style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+              ),
+            ],
           ]),
         ),
       ]),
@@ -373,7 +435,9 @@ class _ValidationPanel extends StatelessWidget {
         Expanded(
           child: Text(
             validation.isValid
-                ? 'Registration is valid. You can submit for approval.'
+                ? (validation.approvalRequired
+                    ? 'Registration is valid, but carryover/repeat courses require academic office confirmation.'
+                    : 'Registration is valid. You can submit for approval.')
                 : validation.messages.join('\n'),
             style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800, height: 1.35),
           ),
