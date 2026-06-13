@@ -28,4 +28,5 @@ abstract class Routes {
   static const notifications = '/notifications';
   static const liveSessions = '/live-sessions';
   static const liveSessionRoom = '/live-sessions/room';
+  static const liveClassHistory = '/live-sessions/history';
 }
