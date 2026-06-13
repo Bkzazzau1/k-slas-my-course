@@ -1,7 +1,12 @@
+import 'dart:convert';
+
 import 'package:get_storage/get_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
 
 import '../models/live_session_models.dart';
+import 'live_session_remote_backend_service.dart';
+import 'live_session_runtime_mode_service.dart';
 
 class LiveReplayBookmark {
   const LiveReplayBookmark({
@@ -54,16 +59,29 @@ class LiveReplayBookmark {
     'createdAt': createdAt.toIso8601String(),
   };
 
+  Map<String, dynamic> toRemoteJson() => {
+    'bookmarkId': id,
+    'sessionId': sessionId,
+    'minute': minute,
+    'title': title,
+    'note': note,
+    'important': isImportant,
+    'createdAt': createdAt.toUtc().toIso8601String(),
+  };
+
   factory LiveReplayBookmark.fromJson(Map<String, dynamic> json) {
     return LiveReplayBookmark(
-      id: json['id']?.toString() ?? LiveReplayLearningToolsService._uuid.v4(),
+      id:
+          json['id']?.toString() ??
+          json['bookmarkId']?.toString() ??
+          LiveReplayLearningToolsService._uuid.v4(),
       sessionId: json['sessionId']?.toString() ?? '',
       minute: json['minute'] is int
           ? json['minute'] as int
           : int.tryParse(json['minute']?.toString() ?? '') ?? 0,
       title: json['title']?.toString() ?? 'Replay moment',
       note: json['note']?.toString() ?? '',
-      isImportant: json['isImportant'] == true,
+      isImportant: json['isImportant'] == true || json['important'] == true,
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now(),
@@ -87,6 +105,47 @@ class LiveReplayRevisionQuestion {
   String get timeLabel => minute == null
       ? 'Whole replay'
       : LiveReplayLearningToolsService.minuteLabel(minute!);
+}
+
+class LiveReplayLearningSyncResult {
+  const LiveReplayLearningSyncResult({
+    required this.attempted,
+    required this.success,
+    required this.message,
+    required this.bookmarkCount,
+  });
+
+  final bool attempted;
+  final bool success;
+  final String message;
+  final int bookmarkCount;
+
+  static LiveReplayLearningSyncResult skipped(String message, int count) {
+    return LiveReplayLearningSyncResult(
+      attempted: false,
+      success: false,
+      message: message,
+      bookmarkCount: count,
+    );
+  }
+
+  static LiveReplayLearningSyncResult ok(String message, int count) {
+    return LiveReplayLearningSyncResult(
+      attempted: true,
+      success: true,
+      message: message,
+      bookmarkCount: count,
+    );
+  }
+
+  static LiveReplayLearningSyncResult failed(String message, int count) {
+    return LiveReplayLearningSyncResult(
+      attempted: true,
+      success: false,
+      message: message,
+      bookmarkCount: count,
+    );
+  }
 }
 
 class LiveReplayLearningToolsService {
@@ -142,10 +201,7 @@ class LiveReplayLearningToolsService {
       items.add(bookmark);
     }
     items.sort((a, b) => a.minute.compareTo(b.minute));
-    await _box.write(
-      _key(bookmark.sessionId),
-      items.map((item) => item.toJson()).toList(),
-    );
+    await _writeBookmarks(bookmark.sessionId, items);
   }
 
   static Future<void> deleteBookmark({
@@ -155,7 +211,102 @@ class LiveReplayLearningToolsService {
     final items = loadBookmarks(sessionId)
         .where((item) => item.id != bookmarkId)
         .toList();
-    await _box.write(_key(sessionId), items.map((item) => item.toJson()).toList());
+    await _writeBookmarks(sessionId, items);
+  }
+
+  static Future<LiveReplayLearningSyncResult> pushBookmarksToBackend({
+    required String sessionId,
+    http.Client? client,
+    LiveSessionBackendConfig? config,
+  }) async {
+    final bookmarks = loadBookmarks(sessionId);
+    final backendConfig = config ?? LiveSessionBackendConfig.fromRuntime();
+    if (!_canUseRemoteBackend(backendConfig)) {
+      return LiveReplayLearningSyncResult.skipped(
+        'Replay learning sync is waiting for production backend configuration.',
+        bookmarks.length,
+      );
+    }
+
+    final ownsClient = client == null;
+    final activeClient = client ?? http.Client();
+    try {
+      await _requestJson(
+        client: activeClient,
+        config: backendConfig,
+        method: 'POST',
+        pathSegments: [
+          'api',
+          'v1',
+          'live-sessions',
+          sessionId,
+          'replay-learning',
+          'bookmarks',
+          'sync',
+        ],
+        body: {
+          'sessionId': sessionId,
+          'bookmarks': bookmarks.map((item) => item.toRemoteJson()).toList(),
+          'syncedAt': DateTime.now().toUtc().toIso8601String(),
+        },
+      );
+      return LiveReplayLearningSyncResult.ok(
+        'Replay learning bookmarks synced to backend.',
+        bookmarks.length,
+      );
+    } catch (error) {
+      return LiveReplayLearningSyncResult.failed(error.toString(), bookmarks.length);
+    } finally {
+      if (ownsClient) activeClient.close();
+    }
+  }
+
+  static Future<LiveReplayLearningSyncResult> pullBookmarksFromBackend({
+    required String sessionId,
+    http.Client? client,
+    LiveSessionBackendConfig? config,
+  }) async {
+    final localBookmarks = loadBookmarks(sessionId);
+    final backendConfig = config ?? LiveSessionBackendConfig.fromRuntime();
+    if (!_canUseRemoteBackend(backendConfig)) {
+      return LiveReplayLearningSyncResult.skipped(
+        'Replay learning pull is waiting for production backend configuration.',
+        localBookmarks.length,
+      );
+    }
+
+    final ownsClient = client == null;
+    final activeClient = client ?? http.Client();
+    try {
+      final payload = await _requestJson(
+        client: activeClient,
+        config: backendConfig,
+        method: 'GET',
+        pathSegments: [
+          'api',
+          'v1',
+          'live-sessions',
+          sessionId,
+          'replay-learning',
+          'bookmarks',
+        ],
+      );
+      final remoteBookmarks = _asList(payload['bookmarks'])
+          .whereType<Map>()
+          .map((item) => LiveReplayBookmark.fromJson(Map<String, dynamic>.from(item)))
+          .where((item) => item.sessionId == sessionId)
+          .toList();
+      final merged = _mergeBookmarks(localBookmarks, remoteBookmarks);
+      await _writeBookmarks(sessionId, merged);
+      return LiveReplayLearningSyncResult.ok(
+        'Replay learning bookmarks pulled from backend.',
+        merged.length,
+      );
+    } catch (error) {
+      return LiveReplayLearningSyncResult.failed(error.toString(), localBookmarks.length);
+    } finally {
+      if (ownsClient) activeClient.close();
+    }
   }
 
   static List<LiveReplayRevisionQuestion> buildQuickRevisionQuestions({
@@ -241,9 +392,91 @@ class LiveReplayLearningToolsService {
     return '${hours}h ${mins.toString().padLeft(2, '0')}m';
   }
 
+  static Future<void> _writeBookmarks(
+    String sessionId,
+    List<LiveReplayBookmark> bookmarks,
+  ) async {
+    bookmarks.sort((a, b) {
+      final byMinute = a.minute.compareTo(b.minute);
+      if (byMinute != 0) return byMinute;
+      return a.createdAt.compareTo(b.createdAt);
+    });
+    await _box.write(_key(sessionId), bookmarks.map((item) => item.toJson()).toList());
+  }
+
+  static bool _canUseRemoteBackend(LiveSessionBackendConfig config) {
+    return LiveSessionRuntimeModeStore.load() == LiveSessionRuntimeMode.production &&
+        config.isConfigured;
+  }
+
+  static List<LiveReplayBookmark> _mergeBookmarks(
+    List<LiveReplayBookmark> local,
+    List<LiveReplayBookmark> remote,
+  ) {
+    final merged = <String, LiveReplayBookmark>{};
+    for (final item in [...local, ...remote]) {
+      final existing = merged[item.id];
+      if (existing == null || item.createdAt.isAfter(existing.createdAt)) {
+        merged[item.id] = item;
+      }
+    }
+    return merged.values.toList();
+  }
+
+  static Future<Map<String, dynamic>> _requestJson({
+    required http.Client client,
+    required LiveSessionBackendConfig config,
+    required String method,
+    required List<String> pathSegments,
+    Map<String, dynamic>? body,
+  }) async {
+    final uri = _buildUri(config, pathSegments);
+    final response = switch (method) {
+      'GET' => await client.get(uri, headers: _jsonHeaders),
+      'POST' => await client.post(
+          uri,
+          headers: _jsonHeaders,
+          body: jsonEncode(body ?? const {}),
+        ),
+      _ => throw UnsupportedError('Unsupported replay learning method: $method'),
+    };
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Replay learning sync failed (${response.statusCode}).');
+    }
+
+    if (response.body.trim().isEmpty) return const {};
+    final decoded = jsonDecode(response.body);
+    if (decoded is Map<String, dynamic>) return decoded;
+    if (decoded is Map) {
+      return decoded.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return const {};
+  }
+
+  static Uri _buildUri(
+    LiveSessionBackendConfig config,
+    List<String> pathSegments,
+  ) {
+    final base = Uri.parse(config.apiBaseUrl);
+    final baseSegments = base.pathSegments
+        .where((segment) => segment.isNotEmpty)
+        .toList();
+    return base.replace(pathSegments: [...baseSegments, ...pathSegments]);
+  }
+
+  static List<dynamic> _asList(Object? value) {
+    if (value is List) return value;
+    return const [];
+  }
+
   static String _shorten(String text, {int max = 90}) {
     final clean = text.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (clean.length <= max) return clean;
     return '${clean.substring(0, max).trim()}...';
   }
+
+  static Map<String, String> get _jsonHeaders => const {
+    'Content-Type': 'application/json',
+  };
 }
