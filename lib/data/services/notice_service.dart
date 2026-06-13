@@ -27,6 +27,7 @@ class NoticeService {
         pinned: true,
         requiresAcknowledgement: true,
         departmentId: p?.departmentId,
+        programmeId: p?.programmeId,
         targetLevel: p?.level,
         targetSemester: p?.semester,
         targetCohortKey: p?.studentCategoryKey,
@@ -41,6 +42,7 @@ class NoticeService {
         source: 'Class Rep',
         createdAt: now.subtract(const Duration(days: 1)),
         departmentId: p?.departmentId,
+        programmeId: p?.programmeId,
         targetLevel: p?.level,
       ),
       NoticeModel(
@@ -79,28 +81,38 @@ class NoticeService {
   }
 
   static bool _matchesStudentProfile(NoticeModel notice, dynamic profile) {
-    if (profile == null) {
-      return notice.targetLevel == null &&
-          notice.targetSemester == null &&
-          notice.departmentId == null &&
-          notice.programmeId == null &&
-          notice.targetCohortKey == null;
-    }
+    if (!_isGeneralNotice(notice) && profile == null) return false;
+    if (_isGeneralNotice(notice)) return true;
+    if (profile == null) return false;
+
+    if (notice.schoolId != null && notice.schoolId != profile.schoolId) return false;
 
     if (!notice.matchesAcademicTarget(
       level: profile.level,
       semester: profile.semester,
       departmentId: profile.departmentId,
-      programmeId: null,
+      programmeId: profile.programmeId,
       cohortKey: profile.studentCategoryKey,
     )) {
       return false;
     }
 
-    if (notice.schoolId != null && notice.schoolId != profile.schoolId) return false;
     if (notice.scope == NoticeScope.course && notice.courseCode != null) {
       return profile.selectedCourses.contains(notice.courseCode);
     }
+
     return true;
+  }
+
+  static bool _isGeneralNotice(NoticeModel notice) {
+    final hasNoAcademicTarget = notice.schoolId == null &&
+        notice.departmentId == null &&
+        notice.programmeId == null &&
+        notice.targetLevel == null &&
+        notice.targetSemester == null &&
+        notice.targetCohortKey == null &&
+        notice.courseCode == null;
+    return hasNoAcademicTarget &&
+        (notice.scope == NoticeScope.school || notice.scope == NoticeScope.exam);
   }
 }
