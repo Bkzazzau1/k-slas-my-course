@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../../data/models/live_session_models.dart';
+import '../widgets/live_class_attendance_report_overlay.dart';
 import '../widgets/live_class_moderation_overlay.dart';
+import '../widgets/live_class_student_attendance_overlay.dart';
 import '../widgets/live_class_student_moderation_guard.dart';
 import '../widgets/live_screen_share_approval_overlay.dart';
 import 'live_classroom_professional_shell.dart';
@@ -22,11 +24,15 @@ class LiveSessionRoomView extends StatelessWidget {
       final participantId = registrationNumber.trim().isEmpty
           ? ''
           : 'student-${registrationNumber.toLowerCase()}';
-      return LiveClassStudentModerationGuard(
+      return LiveClassStudentAttendanceOverlay(
         sessionId: sessionId,
-        participantId: participantId,
         enabled: true,
-        child: const StudentLiveClassRoomView(),
+        child: LiveClassStudentModerationGuard(
+          sessionId: sessionId,
+          participantId: participantId,
+          enabled: true,
+          child: const StudentLiveClassRoomView(),
+        ),
       );
     }
 
@@ -35,15 +41,19 @@ class LiveSessionRoomView extends StatelessWidget {
         args['lecturerName']?.toString() ??
         'Course lecturer';
 
-    return LiveClassModerationOverlay(
+    return LiveClassAttendanceReportOverlay(
       sessionId: sessionId,
-      lecturerName: lecturerName,
       enabled: role == LiveSessionRole.lecturer,
-      child: LiveScreenShareApprovalOverlay(
+      child: LiveClassModerationOverlay(
         sessionId: sessionId,
         lecturerName: lecturerName,
         enabled: role == LiveSessionRole.lecturer,
-        child: const LiveClassroomProfessionalShell(),
+        child: LiveScreenShareApprovalOverlay(
+          sessionId: sessionId,
+          lecturerName: lecturerName,
+          enabled: role == LiveSessionRole.lecturer,
+          child: const LiveClassroomProfessionalShell(),
+        ),
       ),
     );
   }
