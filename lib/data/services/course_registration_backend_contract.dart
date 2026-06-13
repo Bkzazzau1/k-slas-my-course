@@ -6,6 +6,7 @@ class CourseRegistrationBackendPath {
   static const withdrawRegistration = '/api/v1/students/me/course-registration/withdraw';
   static const approveRegistration = '/api/v1/course-registrations/{registrationId}/approve';
   static const rejectRegistration = '/api/v1/course-registrations/{registrationId}/reject';
+  static const confirmCarryover = '/api/v1/course-registrations/{registrationId}/carryovers/confirm';
 }
 
 class CourseRegistrationBackendContract {
@@ -31,6 +32,7 @@ class CourseRegistrationBackendContract {
         'type': 'CORE',
         'level': 300,
         'semester': 1,
+        'registrationKind': 'NORMAL',
         'compulsory': true,
       }
     ],
@@ -42,8 +44,35 @@ class CourseRegistrationBackendContract {
         'type': 'ELECTIVE',
         'level': 300,
         'semester': 1,
+        'registrationKind': 'NORMAL',
         'requiresApproval': false,
       }
+    ],
+    'availableCarryovers': [
+      {
+        'courseCode': 'CSC 209',
+        'courseTitle': 'Computer Architecture',
+        'creditUnits': 3,
+        'type': 'CORE',
+        'level': 200,
+        'semester': 2,
+        'registrationKind': 'CARRYOVER',
+        'previousGrade': 'F',
+        'repeatReason': 'Failed previous attempt',
+        'requiresApproval': true,
+      },
+      {
+        'courseCode': 'GST 203',
+        'courseTitle': 'Entrepreneurship Foundation',
+        'creditUnits': 2,
+        'type': 'ELECTIVE',
+        'level': 200,
+        'semester': 2,
+        'registrationKind': 'REPEAT',
+        'previousGrade': 'ABS',
+        'repeatReason': 'Absent or missing result',
+        'requiresApproval': true,
+      },
     ],
   };
 
@@ -56,32 +85,41 @@ class CourseRegistrationBackendContract {
       'SEN 301',
       'CSC 311',
       'ENT 301',
+      'CSC 209',
+    ],
+    'selectedCarryoverCourseCodes': [
+      'CSC 209',
     ],
   };
 
   static const submitResponseExample = {
     'registrationId': 'reg-2025-2026-300-1-0400',
     'status': 'SUBMITTED',
-    'totalCreditUnits': 16,
+    'totalCreditUnits': 19,
+    'carryoverCreditUnits': 3,
+    'approvalRequired': true,
     'submittedAt': '2026-06-13T12:00:00Z',
-    'message': 'Course registration submitted for approval.',
+    'message': 'Course registration submitted for academic office approval.',
   };
 
   static const validationRules = [
     'The backend must derive the student from the authenticated token only.',
     'Core courses from the student programme curriculum must be automatically required and cannot be removed by the client.',
     'Elective courses must be selected only from electives available to the student programme, cohort, level, and semester.',
-    'Selected credit units must be greater than or equal to minCreditUnits and less than or equal to maxCreditUnits.',
-    'The backend must reject courses outside the student programme curriculum unless explicitly approved as carryover, spillover, or approved special registration.',
+    'Carryover/repeat courses must come from failed, absent, missing-result, withdrawn, or approved-repeat records belonging to the authenticated student.',
+    'Carryover/repeat courses outside the normal level/semester must require academic office or exam officer confirmation before final approval.',
+    'Selected credit units must be greater than or equal to minCreditUnits and less than or equal to maxCreditUnits, unless an authorized overload waiver is recorded.',
+    'The backend must reject courses outside the student programme curriculum unless explicitly approved as carryover, spillover, repeat, or approved special registration.',
     'The backend must prevent duplicate registration for the same course/session unless policy allows course repeat.',
     'The backend must block registration after the registration deadline unless exam officer/admin override is recorded.',
-    'Submitted registration should enter SUBMITTED or APPROVED depending on institution policy.',
+    'Submitted registration should enter SUBMITTED, CARRYOVER_REVIEW, or APPROVED depending on institution policy.',
     'Students must not register for another student by supplying studentId in the payload.',
   ];
 
   static const approvalStatuses = [
     'DRAFT',
     'SUBMITTED',
+    'CARRYOVER_REVIEW',
     'APPROVED',
     'REJECTED',
     'WITHDRAWN',
@@ -91,6 +129,7 @@ class CourseRegistrationBackendContract {
   static const auditEvents = [
     'COURSE_REGISTRATION_DRAFT_SAVED',
     'COURSE_REGISTRATION_SUBMITTED',
+    'COURSE_REGISTRATION_CARRYOVER_CONFIRMED',
     'COURSE_REGISTRATION_APPROVED',
     'COURSE_REGISTRATION_REJECTED',
     'COURSE_REGISTRATION_WITHDRAWN',
