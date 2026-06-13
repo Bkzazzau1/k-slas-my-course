@@ -8,6 +8,7 @@ class CourseRegistrationRuleSet {
     required this.maxCreditUnits,
     required this.requiredCoreCourses,
     required this.availableElectives,
+    required this.availableCarryovers,
     required this.academicSession,
   });
 
@@ -15,9 +16,14 @@ class CourseRegistrationRuleSet {
   final int maxCreditUnits;
   final List<CourseModel> requiredCoreCourses;
   final List<CourseModel> availableElectives;
+  final List<CourseModel> availableCarryovers;
   final String academicSession;
 
-  List<CourseModel> get allAvailable => [...requiredCoreCourses, ...availableElectives];
+  List<CourseModel> get allAvailable => [
+        ...requiredCoreCourses,
+        ...availableElectives,
+        ...availableCarryovers,
+      ];
 }
 
 class CourseRegistrationValidationResult {
@@ -27,6 +33,8 @@ class CourseRegistrationValidationResult {
     required this.totalCredits,
     required this.coreCredits,
     required this.electiveCredits,
+    required this.carryoverCredits,
+    required this.approvalRequired,
   });
 
   final bool isValid;
@@ -34,6 +42,8 @@ class CourseRegistrationValidationResult {
   final int totalCredits;
   final int coreCredits;
   final int electiveCredits;
+  final int carryoverCredits;
+  final bool approvalRequired;
 }
 
 class CourseRegistrationDraft {
@@ -63,15 +73,26 @@ class CourseRegistrationService {
       academicSession: session,
       requiredCoreCourses: _coreCourses(level: level, semester: semester, profile: profile),
       availableElectives: _electiveCourses(level: level, semester: semester, profile: profile),
+      availableCarryovers: _carryoverCourses(level: level, semester: semester, profile: profile),
     );
   }
 
-  static CourseRegistrationDraft buildDraft(Set<String> selectedElectiveCodes) {
+  static CourseRegistrationDraft buildDraft(
+    Set<String> selectedElectiveCodes, {
+    Set<String> selectedCarryoverCodes = const <String>{},
+  }) {
     final rules = loadRuleSet();
     final selectedElectives = rules.availableElectives
         .where((course) => selectedElectiveCodes.contains(course.code))
         .toList();
-    final selected = [...rules.requiredCoreCourses, ...selectedElectives];
+    final selectedCarryovers = rules.availableCarryovers
+        .where((course) => selectedCarryoverCodes.contains(course.code))
+        .toList();
+    final selected = [
+      ...rules.requiredCoreCourses,
+      ...selectedElectives,
+      ...selectedCarryovers,
+    ];
     return CourseRegistrationDraft(
       selectedCourses: selected,
       ruleSet: rules,
@@ -86,14 +107,20 @@ class CourseRegistrationService {
     final messages = <String>[];
     final selectedCodes = selectedCourses.map((course) => course.code).toSet();
     final coreCodes = ruleSet.requiredCoreCourses.map((course) => course.code).toSet();
+    final carryoverCodes = ruleSet.availableCarryovers.map((course) => course.code).toSet();
     final missingCore = coreCodes.difference(selectedCodes);
+    final selectedCarryoverCodes = selectedCodes.intersection(carryoverCodes);
     final totalCredits = selectedCourses.fold<int>(0, (sum, course) => sum + course.creditUnits);
     final coreCredits = selectedCourses
-        .where((course) => course.isCore)
+        .where((course) => course.isCore && !course.isCarryover && !course.isRepeat)
         .fold<int>(0, (sum, course) => sum + course.creditUnits);
     final electiveCredits = selectedCourses
-        .where((course) => course.isElective)
+        .where((course) => course.isElective && !course.isCarryover && !course.isRepeat)
         .fold<int>(0, (sum, course) => sum + course.creditUnits);
+    final carryoverCredits = selectedCourses
+        .where((course) => course.isCarryover || course.isRepeat)
+        .fold<int>(0, (sum, course) => sum + course.creditUnits);
+    final approvalRequired = selectedCourses.any((course) => course.requiresApproval);
 
     if (missingCore.isNotEmpty) {
       messages.add('All core courses are compulsory: ${missingCore.join(', ')}.');
@@ -109,13 +136,20 @@ class CourseRegistrationService {
         totalCredits < ruleSet.minCreditUnits) {
       messages.add('Choose at least one elective to meet the credit requirement.');
     }
+    if (selectedCarryoverCodes.isNotEmpty) {
+      messages.add(
+        'Carryover/repeat courses require academic office confirmation before final approval.',
+      );
+    }
 
     return CourseRegistrationValidationResult(
-      isValid: messages.isEmpty,
+      isValid: messages.where((m) => !m.startsWith('Carryover/repeat')).isEmpty,
       messages: messages,
       totalCredits: totalCredits,
       coreCredits: coreCredits,
       electiveCredits: electiveCredits,
+      carryoverCredits: carryoverCredits,
+      approvalRequired: approvalRequired || selectedCarryoverCodes.isNotEmpty,
     );
   }
 
@@ -263,6 +297,50 @@ class CourseRegistrationService {
         notes: false,
         pastQuestions: true,
         progress: 18,
+      ),
+    ];
+  }
+
+  static List<CourseModel> _carryoverCourses({
+    required int level,
+    required int semester,
+    StudentProfileModel? profile,
+  }) {
+    if (level <= 100) return const [];
+    final session = _academicSession(DateTime.now());
+    final previousLevel = level - 100;
+    return [
+      CourseModel(
+        'CSC 209',
+        'Computer Architecture',
+        creditUnits: 3,
+        type: CourseType.core,
+        level: previousLevel,
+        semester: 2,
+        academicSession: session,
+        registrationKind: CourseRegistrationKind.carryover,
+        previousGrade: 'F',
+        repeatReason: 'Failed previous attempt',
+        requiresApproval: true,
+        notes: true,
+        pastQuestions: true,
+        progress: 0,
+      ),
+      CourseModel(
+        'GST 203',
+        'Entrepreneurship Foundation',
+        creditUnits: 2,
+        type: CourseType.elective,
+        level: previousLevel,
+        semester: 2,
+        academicSession: session,
+        registrationKind: CourseRegistrationKind.repeat,
+        previousGrade: 'ABS',
+        repeatReason: 'Absent / missing result',
+        requiresApproval: true,
+        notes: false,
+        pastQuestions: true,
+        progress: 0,
       ),
     ];
   }
