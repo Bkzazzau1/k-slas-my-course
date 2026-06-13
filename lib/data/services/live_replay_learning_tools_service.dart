@@ -202,6 +202,7 @@ class LiveReplayLearningToolsService {
     }
     items.sort((a, b) => a.minute.compareTo(b.minute));
     await _writeBookmarks(bookmark.sessionId, items);
+    await pushBookmarksToBackend(sessionId: bookmark.sessionId);
   }
 
   static Future<void> deleteBookmark({
@@ -212,6 +213,7 @@ class LiveReplayLearningToolsService {
         .where((item) => item.id != bookmarkId)
         .toList();
     await _writeBookmarks(sessionId, items);
+    await pushBookmarksToBackend(sessionId: sessionId);
   }
 
   static Future<LiveReplayLearningSyncResult> pushBookmarksToBackend({
