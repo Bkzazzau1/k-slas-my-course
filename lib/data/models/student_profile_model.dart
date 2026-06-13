@@ -8,6 +8,8 @@ class StudentProfileModel {
     required this.semester,
     required this.selectedCourses,
     required this.fullName,
+    this.programmeId,
+    this.programmeName,
     this.matricNo,
     this.email,
     this.phone,
@@ -18,6 +20,8 @@ class StudentProfileModel {
   final String schoolName;
   final String departmentId;
   final String departmentName;
+  final String? programmeId;
+  final String? programmeName;
   final int level;
   final int semester;
   final List<String> selectedCourses; // course codes
