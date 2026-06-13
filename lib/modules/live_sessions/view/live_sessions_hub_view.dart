@@ -62,6 +62,8 @@ class _LiveSessionsHubViewState extends State<LiveSessionsHubView> {
                     const SizedBox(height: 12),
                     _HistoryShortcutCard(onTap: () => Get.toNamed(Routes.liveClassHistory)),
                     const SizedBox(height: 12),
+                    _ControlRoomShortcutCard(onTap: () => Get.toNamed(Routes.liveChiefOverview)),
+                    const SizedBox(height: 12),
                     const _ReadinessCard(),
                     const SizedBox(height: 12),
                     _FilterBar(selected: selectedFilter, onChanged: (value) => setState(() => selectedFilter = value)),
@@ -203,12 +205,41 @@ class _HistoryShortcutCard extends StatelessWidget {
   }
 }
 
+class _ControlRoomShortcutCard extends StatelessWidget {
+  const _ControlRoomShortcutCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.indigo.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.indigo.withValues(alpha: 0.20)),
+        ),
+        child: Row(children: [
+          const CircleAvatar(backgroundColor: Colors.indigo, child: Icon(Icons.admin_panel_settings_rounded, color: Colors.white)),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Chief invigilator control room', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16)), const SizedBox(height: 4), Text('Monitor live classes, incidents, attendance risks, screen-share requests, and alerts.', style: TextStyle(color: cs.onSurface.withValues(alpha: 0.68), fontWeight: FontWeight.w700))])),
+          const Icon(Icons.arrow_forward_ios_rounded, size: 18, color: Colors.indigo),
+        ]),
+      ),
+    );
+  }
+}
+
 class _ReadinessCard extends StatelessWidget {
   const _ReadinessCard();
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: cs.primary.withValues(alpha: 0.10))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [CircleAvatar(backgroundColor: cs.primary.withValues(alpha: 0.10), child: Icon(Icons.fact_check_outlined, color: cs.primary)), const SizedBox(width: 10), Expanded(child: Text('Class readiness', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16))), _MiniPill(text: 'Student checklist', tone: cs.primary)]), const SizedBox(height: 12), const _CheckLine(text: 'Use a stable network before joining live class.'), const _CheckLine(text: 'Keep microphone muted until the lecturer allows questions.'), const _CheckLine(text: 'Join with your registered student profile for attendance.')]));
+    return Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: cs.primary.withValues(alpha: 0.10))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [CircleAvatar(backgroundColor: cs.primary.withValues(alpha: 0.10), child: Icon(Icons.fact_check_outlined, color: cs.primary)), const SizedBox(width: 10), Expanded(child: Text('Class readiness', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16))), _MiniPill(text: 'Student checklist', tone: cs.primary)]), const SizedBox(height: 12), const _CheckLine(text: 'Use a stable network before joining live class.'), const _CheckLine(text: 'Keep microphone muted until the lecturer allows questions.'), const _CheckLine(text: 'Join with your registered student profile for attendance.')])) ;
   }
 }
 
