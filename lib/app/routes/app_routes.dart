@@ -24,6 +24,7 @@ abstract class Routes {
   static const examResult = '/exam/result';
   static const theoryRewrite = '/theory/rewrite';
   static const assignments = '/assignments';
+  static const lecturerAssignments = '/lecturer/assignments';
   static const results = '/results';
   static const notifications = '/notifications';
   static const liveSessions = '/live-sessions';
