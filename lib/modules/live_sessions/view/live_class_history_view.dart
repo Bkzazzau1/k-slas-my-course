@@ -187,7 +187,7 @@ class _LiveClassHistoryViewState extends State<LiveClassHistoryView> {
           title: session.title,
           lecturer: session.lecturerName,
           dateLabel: liveSessionDateTime(session.startTime),
-          replayAvailable: session.recordingPolicy != LiveSessionRecordingPolicy.disabled,
+          replayAvailable: session.allowLecturerRecording,
           hasNotes: note.isNotEmpty,
           attendance: attendance,
           sortTime: session.startTime,
