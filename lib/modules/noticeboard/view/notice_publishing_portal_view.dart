@@ -33,6 +33,9 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
   final _bodyController = TextEditingController();
   final _courseController = TextEditingController(text: 'CSC 305');
   final _referenceController = TextEditingController();
+  final _departmentController = TextEditingController();
+  final _programmeController = TextEditingController();
+  final _cohortController = TextEditingController();
 
   String _scope = NoticeScope.course;
   String _audience = NoticeAudience.students;
@@ -49,22 +52,30 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
     _bodyController.dispose();
     _courseController.dispose();
     _referenceController.dispose();
+    _departmentController.dispose();
+    _programmeController.dispose();
+    _cohortController.dispose();
     super.dispose();
   }
 
-  List<String> get _allowedScopes {
-    return [
-      if (widget.allowSchoolScope) NoticeScope.school,
-      NoticeScope.level,
-      NoticeScope.course,
-      if (widget.allowExamScope) NoticeScope.exam,
-    ];
-  }
+  List<String> get _allowedScopes => [
+        if (widget.allowSchoolScope) NoticeScope.school,
+        NoticeScope.department,
+        NoticeScope.programme,
+        NoticeScope.level,
+        NoticeScope.cohort,
+        NoticeScope.course,
+        if (widget.allowExamScope) NoticeScope.exam,
+      ];
 
   Future<void> _publish() async {
     final title = _titleController.text.trim();
     final body = _bodyController.text.trim();
     final course = _courseController.text.trim().toUpperCase();
+    final departmentId = _departmentController.text.trim();
+    final programmeId = _programmeController.text.trim();
+    final cohortKey = _cohortController.text.trim();
+
     if (title.length < 5 || body.length < 15) {
       _snack('Incomplete notice', 'Add a clear title and enough notice details.');
       return;
@@ -73,8 +84,20 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
       _snack('Course required', 'Enter a course code for course notices.');
       return;
     }
+    if (_scope == NoticeScope.department && departmentId.isEmpty) {
+      _snack('Department required', 'Enter a department ID or code for this notice.');
+      return;
+    }
+    if (_scope == NoticeScope.programme && programmeId.isEmpty) {
+      _snack('Programme required', 'Enter a programme ID or code for this notice.');
+      return;
+    }
     if (_scope == NoticeScope.level && _targetLevel == null) {
       _snack('Level required', 'Choose the student level for this notice.');
+      return;
+    }
+    if (_scope == NoticeScope.cohort && cohortKey.isEmpty) {
+      _snack('Cohort required', 'Enter the cohort/category key for this notice.');
       return;
     }
 
@@ -99,8 +122,11 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
       reference: _referenceController.text.trim().isEmpty
           ? null
           : _referenceController.text.trim(),
+      departmentId: departmentId.isEmpty ? null : departmentId,
+      programmeId: programmeId.isEmpty ? null : programmeId,
       targetLevel: _targetLevel,
       targetSemester: _targetSemester,
+      targetCohortKey: cohortKey.isEmpty ? null : cohortKey,
     );
 
     await NoticeStorage.savePublishedNotice(notice);
@@ -148,6 +174,9 @@ class _NoticePublishingPortalViewState extends State<NoticePublishingPortalView>
               bodyController: _bodyController,
               courseController: _courseController,
               referenceController: _referenceController,
+              departmentController: _departmentController,
+              programmeController: _programmeController,
+              cohortController: _cohortController,
               allowedScopes: _allowedScopes,
               scope: _scope,
               audience: _audience,
@@ -261,7 +290,7 @@ class _NoticePublisherHero extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Publish official notices from this role portal only. Notices may be targeted by course, level, semester, or the whole school.',
+            'Publish official notices from this role portal only. Notices may be targeted by department, programme, cohort, level, semester, course, or the whole school.',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.90),
               fontWeight: FontWeight.w700,
@@ -280,6 +309,9 @@ class _PublisherFormCard extends StatelessWidget {
     required this.bodyController,
     required this.courseController,
     required this.referenceController,
+    required this.departmentController,
+    required this.programmeController,
+    required this.cohortController,
     required this.allowedScopes,
     required this.scope,
     required this.audience,
@@ -304,6 +336,9 @@ class _PublisherFormCard extends StatelessWidget {
   final TextEditingController bodyController;
   final TextEditingController courseController;
   final TextEditingController referenceController;
+  final TextEditingController departmentController;
+  final TextEditingController programmeController;
+  final TextEditingController cohortController;
   final List<String> allowedScopes;
   final String scope;
   final String audience;
@@ -400,6 +435,12 @@ class _PublisherFormCard extends StatelessWidget {
               ),
             ),
           ],
+          const SizedBox(height: 10),
+          _TargetTextFields(
+            departmentController: departmentController,
+            programmeController: programmeController,
+            cohortController: cohortController,
+          ),
           const SizedBox(height: 10),
           Row(
             children: [
@@ -500,10 +541,56 @@ class _PublisherFormCard extends StatelessWidget {
         return 'Programme';
       case NoticeScope.level:
         return 'Level';
+      case NoticeScope.cohort:
+        return 'Cohort';
       case NoticeScope.course:
       default:
         return 'Course';
     }
+  }
+}
+
+class _TargetTextFields extends StatelessWidget {
+  const _TargetTextFields({
+    required this.departmentController,
+    required this.programmeController,
+    required this.cohortController,
+  });
+
+  final TextEditingController departmentController;
+  final TextEditingController programmeController;
+  final TextEditingController cohortController;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextField(
+          controller: departmentController,
+          decoration: const InputDecoration(
+            labelText: 'Department ID / code (optional)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: programmeController,
+          decoration: const InputDecoration(
+            labelText: 'Programme ID / code (optional)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: cohortController,
+          decoration: const InputDecoration(
+            labelText: 'Cohort / student category key (optional)',
+            hintText: 'Example: regular, part-time, dlc, 2023-intake',
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -527,7 +614,10 @@ class _PublishedNoticeTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(notice.isPublished ? Icons.campaign_rounded : Icons.archive_outlined, color: cs.primary),
+          Icon(
+            notice.isPublished ? Icons.campaign_rounded : Icons.archive_outlined,
+            color: cs.primary,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -537,7 +627,11 @@ class _PublishedNoticeTile extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '${notice.scope}${notice.courseCode == null ? '' : ' • ${notice.courseCode}'} • ${_targetLabel(notice)} • ${notice.status}',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -551,8 +645,15 @@ class _PublishedNoticeTile extends StatelessWidget {
 
   String _targetLabel(NoticeModel notice) {
     final level = notice.targetLevel == null ? 'All levels' : '${notice.targetLevel} Level';
-    final semester = notice.targetSemester == null ? 'All semesters' : 'Semester ${notice.targetSemester}';
-    return '$level • $semester';
+    final semester = notice.targetSemester == null
+        ? 'All semesters'
+        : 'Semester ${notice.targetSemester}';
+    final department = notice.departmentId == null ? null : 'Dept ${notice.departmentId}';
+    final programme = notice.programmeId == null ? null : 'Programme ${notice.programmeId}';
+    final cohort = notice.targetCohortKey == null ? null : 'Cohort ${notice.targetCohortKey}';
+    return [department, programme, cohort, level, semester]
+        .whereType<String>()
+        .join(' • ');
   }
 }
 
