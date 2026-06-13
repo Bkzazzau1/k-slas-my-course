@@ -42,6 +42,7 @@ import '../../modules/theory_rewrite/binding/theory_rewrite_binding.dart';
 import '../../modules/theory_rewrite/view/theory_rewrite_view.dart';
 import '../../modules/live_sessions/binding/live_sessions_binding.dart';
 import '../../modules/live_sessions/view/live_class_history_view.dart';
+import '../../modules/live_sessions/view/live_class_replay_view.dart';
 import '../../modules/live_sessions/view/live_sessions_hub_view.dart';
 import '../../modules/live_sessions/view/live_session_room_view.dart';
 import '../../modules/timetable/binding/timetable_binding.dart';
@@ -204,6 +205,11 @@ class AppPages {
     GetPage(
       name: Routes.liveClassHistory,
       page: () => const LiveClassHistoryView(),
+      binding: LiveSessionsBinding(),
+    ),
+    GetPage(
+      name: Routes.liveSessionReplay,
+      page: () => const LiveClassReplayView(),
       binding: LiveSessionsBinding(),
     ),
   ];
