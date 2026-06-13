@@ -34,12 +34,14 @@ abstract class Routes {
   static const liveChiefOverview = '/live-sessions/chief-overview';
 
   // Lecturer portal routes.
+  static const lecturerNoticeboard = '/lecturer/noticeboard';
   static const lecturerLiveSessions = '/lecturer/live-sessions';
   static const lecturerExams = '/lecturer/exams';
   static const lecturerResults = '/lecturer/results';
   static const lecturerNotifications = '/lecturer/notifications';
 
   // Exam officer portal routes.
+  static const examOfficerNoticeboard = '/exam-officer/noticeboard';
   static const examOfficerLiveSessions = '/exam-officer/live-sessions';
   static const examOfficerExams = '/exam-officer/exams';
   static const examOfficerResults = '/exam-officer/results';
