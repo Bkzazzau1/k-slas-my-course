@@ -14,6 +14,7 @@ import '../../modules/chat/view/chat_view.dart';
 import '../../modules/courses/binding/courses_binding.dart';
 import '../../modules/courses/view/course_detail_view.dart';
 import '../../modules/courses/view/courses_list_view.dart';
+import '../../modules/courses/view/student_academic_record_view.dart';
 import '../../features/dashboard/binding/dashboard_binding.dart';
 import '../../features/dashboard/controller/dashboard_controller.dart';
 import '../../features/dashboard/view/dashboard_view.dart';
@@ -65,6 +66,7 @@ class AppPages {
     GetPage(name: Routes.demoWalkthrough, page: () => const DemoWalkthroughView()),
     GetPage(name: Routes.courses, page: () => const CoursesListView(), binding: CoursesBinding()),
     GetPage(name: Routes.courseDetail, page: () => const CourseDetailView(), binding: CoursesBinding()),
+    GetPage(name: Routes.academicRecord, page: () => const StudentAcademicRecordView(), binding: CoursesBinding()),
     GetPage(name: Routes.chat, page: () => const ChatView(), binding: ChatBinding()),
     GetPage(name: Routes.practiceSetup, page: () => const PracticeSetupView(), binding: PracticeBinding()),
     GetPage(name: Routes.practiceSession, page: () => const PracticeSessionView(), binding: PracticeBinding()),
