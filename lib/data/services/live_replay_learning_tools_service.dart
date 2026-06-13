@@ -56,7 +56,7 @@ class LiveReplayBookmark {
 
   factory LiveReplayBookmark.fromJson(Map<String, dynamic> json) {
     return LiveReplayBookmark(
-      id: json['id']?.toString() ?? const Uuid().v4(),
+      id: json['id']?.toString() ?? LiveReplayLearningToolsService._uuid.v4(),
       sessionId: json['sessionId']?.toString() ?? '',
       minute: json['minute'] is int
           ? json['minute'] as int
@@ -93,7 +93,7 @@ class LiveReplayLearningToolsService {
   LiveReplayLearningToolsService._();
 
   static final GetStorage _box = GetStorage();
-  static const Uuid _uuid = Uuid();
+  static final Uuid _uuid = Uuid();
 
   static String _key(String sessionId) =>
       'student.live.replay.learning.bookmarks.${sessionId.trim()}';
