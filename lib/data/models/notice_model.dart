@@ -3,6 +3,7 @@ class NoticeScope {
   static const String course = 'COURSE';
   static const String department = 'DEPARTMENT';
   static const String programme = 'PROGRAMME';
+  static const String level = 'LEVEL';
   static const String exam = 'EXAM';
 }
 
@@ -39,6 +40,11 @@ class NoticeModel {
     this.pinned = false,
     this.requiresAcknowledgement = false,
     this.reference,
+    this.schoolId,
+    this.departmentId,
+    this.programmeId,
+    this.targetLevel,
+    this.targetSemester,
   });
 
   final String id;
@@ -58,10 +64,21 @@ class NoticeModel {
   final bool pinned;
   final bool requiresAcknowledgement;
   final String? reference;
+  final String? schoolId;
+  final String? departmentId;
+  final String? programmeId;
+  final int? targetLevel;
+  final int? targetSemester;
 
   bool get isImportant => priority > 0;
   bool get isPublished => status == NoticeStatus.published;
   bool get isExpired => expiresAt != null && DateTime.now().isAfter(expiresAt!);
+
+  bool matchesLevel({int? level, int? semester}) {
+    final levelOk = targetLevel == null || targetLevel == level;
+    final semesterOk = targetSemester == null || targetSemester == semester;
+    return levelOk && semesterOk;
+  }
 
   NoticeModel copyWith({
     String? id,
@@ -81,6 +98,11 @@ class NoticeModel {
     bool? pinned,
     bool? requiresAcknowledgement,
     String? reference,
+    String? schoolId,
+    String? departmentId,
+    String? programmeId,
+    int? targetLevel,
+    int? targetSemester,
   }) {
     return NoticeModel(
       id: id ?? this.id,
@@ -101,6 +123,11 @@ class NoticeModel {
       requiresAcknowledgement:
           requiresAcknowledgement ?? this.requiresAcknowledgement,
       reference: reference ?? this.reference,
+      schoolId: schoolId ?? this.schoolId,
+      departmentId: departmentId ?? this.departmentId,
+      programmeId: programmeId ?? this.programmeId,
+      targetLevel: targetLevel ?? this.targetLevel,
+      targetSemester: targetSemester ?? this.targetSemester,
     );
   }
 
@@ -123,6 +150,11 @@ class NoticeModel {
       'pinned': pinned,
       'requiresAcknowledgement': requiresAcknowledgement,
       'reference': reference,
+      'schoolId': schoolId,
+      'departmentId': departmentId,
+      'programmeId': programmeId,
+      'targetLevel': targetLevel,
+      'targetSemester': targetSemester,
     };
   }
 
@@ -147,6 +179,17 @@ class NoticeModel {
       pinned: map['pinned'] == true,
       requiresAcknowledgement: map['requiresAcknowledgement'] == true,
       reference: map['reference']?.toString(),
+      schoolId: map['schoolId']?.toString(),
+      departmentId: map['departmentId']?.toString(),
+      programmeId: map['programmeId']?.toString(),
+      targetLevel: _intOrNull(map['targetLevel']),
+      targetSemester: _intOrNull(map['targetSemester']),
     );
+  }
+
+  static int? _intOrNull(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
   }
 }
