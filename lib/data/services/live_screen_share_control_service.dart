@@ -94,7 +94,7 @@ class LiveScreenShareRequest {
 
   factory LiveScreenShareRequest.fromJson(Map<String, dynamic> json) {
     return LiveScreenShareRequest(
-      id: json['id']?.toString() ?? const Uuid().v4(),
+      id: json['id']?.toString() ?? LiveScreenShareControlService.newId(),
       sessionId: json['sessionId']?.toString() ?? '',
       participantId: json['participantId']?.toString() ?? '',
       studentName: json['studentName']?.toString() ?? 'Student',
@@ -122,6 +122,8 @@ class LiveScreenShareControlService {
 
   static final GetStorage _box = GetStorage();
   static final Uuid _uuid = Uuid();
+
+  static String newId() => _uuid.v4();
 
   static String _key(String sessionId) =>
       'live.screenShare.requests.${sessionId.trim()}';
