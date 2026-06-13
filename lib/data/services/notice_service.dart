@@ -26,8 +26,10 @@ class NoticeService {
         priority: 1,
         pinned: true,
         requiresAcknowledgement: true,
+        departmentId: p?.departmentId,
         targetLevel: p?.level,
         targetSemester: p?.semester,
+        targetCohortKey: p?.studentCategoryKey,
       ),
       NoticeModel(
         id: 'n2',
@@ -38,6 +40,7 @@ class NoticeService {
         courseCode: course,
         source: 'Class Rep',
         createdAt: now.subtract(const Duration(days: 1)),
+        departmentId: p?.departmentId,
         targetLevel: p?.level,
       ),
       NoticeModel(
@@ -76,13 +79,25 @@ class NoticeService {
   }
 
   static bool _matchesStudentProfile(NoticeModel notice, dynamic profile) {
-    if (profile == null) return notice.targetLevel == null && notice.targetSemester == null;
-    if (!notice.matchesLevel(level: profile.level, semester: profile.semester)) return false;
+    if (profile == null) {
+      return notice.targetLevel == null &&
+          notice.targetSemester == null &&
+          notice.departmentId == null &&
+          notice.programmeId == null &&
+          notice.targetCohortKey == null;
+    }
 
-    if (notice.schoolId != null && notice.schoolId != profile.schoolId) return false;
-    if (notice.departmentId != null && notice.departmentId != profile.departmentId) {
+    if (!notice.matchesAcademicTarget(
+      level: profile.level,
+      semester: profile.semester,
+      departmentId: profile.departmentId,
+      programmeId: null,
+      cohortKey: profile.studentCategoryKey,
+    )) {
       return false;
     }
+
+    if (notice.schoolId != null && notice.schoolId != profile.schoolId) return false;
     if (notice.scope == NoticeScope.course && notice.courseCode != null) {
       return profile.selectedCourses.contains(notice.courseCode);
     }
