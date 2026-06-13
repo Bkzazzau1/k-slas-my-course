@@ -102,8 +102,10 @@ class _LiveSessionsHubViewState extends State<LiveSessionsHubView> {
   }
 
   void _joinSession(LiveSessionModel session, dynamic profile) {
+    final now = DateTime.now();
+    final route = session.isCompletedAt(now) ? Routes.liveSessionReplay : Routes.liveSessionRoom;
     Get.toNamed(
-      Routes.liveSessionRoom,
+      route,
       arguments: {
         'sessionId': session.id,
         'role': LiveSessionRole.student,
