@@ -35,6 +35,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
   _StudentRoomPanel activePanel = _StudentRoomPanel.chat;
   bool handRaised = false;
   bool attendanceSaved = false;
+  bool screenShareOn = false;
 
   @override
   void initState() {
@@ -57,6 +58,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
   @override
   void dispose() {
     refreshTimer?.cancel();
+    unawaited(_stopScreenShareSilently());
     unawaited(controller.disconnectMediaRoom());
     chatController.dispose();
     questionController.dispose();
@@ -98,11 +100,47 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Question sent to the lecturer.')));
   }
 
+  Future<void> _toggleScreenShare() async {
+    final next = !screenShareOn;
+    try {
+      final localParticipant = controller.rtcRoom.value?.localParticipant;
+      if (localParticipant != null) {
+        await localParticipant.setScreenShareEnabled(next);
+      }
+      if (!mounted) return;
+      setState(() => screenShareOn = next);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            next
+                ? 'Screen sharing started. The lecturer can see your shared screen.'
+                : 'Screen sharing stopped.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Screen share could not start: $error')),
+      );
+    }
+  }
+
+  Future<void> _stopScreenShareSilently() async {
+    if (!screenShareOn) return;
+    try {
+      await controller.rtcRoom.value?.localParticipant?.setScreenShareEnabled(false);
+    } catch (_) {
+      // Ignore cleanup errors while leaving the class.
+    }
+  }
+
   Future<void> _saveNotes(String value) {
     return LiveClassStudentNotesService.save(sessionId: sessionId, note: value);
   }
 
   Future<void> _leaveClass() async {
+    await _stopScreenShareSilently();
     await _saveNotes(noteController.text);
     await _saveAttendanceReceipt();
     if (mounted) Get.back<void>();
@@ -189,6 +227,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
                 child: _RoomHeader(
                   room: room,
                   participant: participant,
+                  screenShareOn: screenShareOn,
                   onLeave: () => unawaited(_leaveClass()),
                 ),
               ),
@@ -207,9 +246,11 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
                                 controller: controller,
                                 micOn: micOn,
                                 cameraOn: cameraOn,
+                                screenShareOn: screenShareOn,
                                 handRaised: handRaised,
                                 onMic: () => controller.toggleMicrophone(!micOn),
                                 onCamera: () => controller.toggleCamera(!cameraOn),
+                                onScreenShare: _toggleScreenShare,
                                 onRaiseHand: () => setState(() => handRaised = !handRaised),
                                 onAsk: () => setState(() => activePanel = _StudentRoomPanel.questions),
                               ),
@@ -239,7 +280,7 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                         children: [
                           SizedBox(
-                            height: 430,
+                            height: 450,
                             child: _StageAndControls(
                               room: room,
                               lecturer: lecturer,
@@ -247,9 +288,11 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
                               controller: controller,
                               micOn: micOn,
                               cameraOn: cameraOn,
+                              screenShareOn: screenShareOn,
                               handRaised: handRaised,
                               onMic: () => controller.toggleMicrophone(!micOn),
                               onCamera: () => controller.toggleCamera(!cameraOn),
+                              onScreenShare: _toggleScreenShare,
                               onRaiseHand: () => setState(() => handRaised = !handRaised),
                               onAsk: () => setState(() => activePanel = _StudentRoomPanel.questions),
                             ),
@@ -282,9 +325,10 @@ class _StudentLiveClassRoomViewState extends State<StudentLiveClassRoomView> {
 }
 
 class _RoomHeader extends StatelessWidget {
-  const _RoomHeader({required this.room, required this.participant, required this.onLeave});
+  const _RoomHeader({required this.room, required this.participant, required this.screenShareOn, required this.onLeave});
   final LiveSessionRoomState room;
   final LiveSessionParticipant? participant;
+  final bool screenShareOn;
   final VoidCallback onLeave;
 
   @override
@@ -294,16 +338,17 @@ class _RoomHeader extends StatelessWidget {
     final attendance = participant?.attendanceMinutesAt(now) ?? 0;
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(24), gradient: LinearGradient(colors: [cs.primary, cs.secondary])),
       child: Row(children: [
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${room.session.courseCode} • ${room.session.title}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20)),
           const SizedBox(height: 6),
           Text(liveSessionDayTimeRange(room.session.startTime, room.session.endTime), style: TextStyle(color: Colors.white.withValues(alpha: 0.88), fontWeight: FontWeight.w700)),
         ])),
+        if (screenShareOn) ...[
+          const _HeaderPill(icon: Icons.screen_share_rounded, label: 'Sharing'),
+          const SizedBox(width: 8),
+        ],
         _HeaderPill(icon: Icons.groups_rounded, label: '${room.participants.length}'),
         const SizedBox(width: 8),
         _HeaderPill(icon: Icons.timer_outlined, label: '${attendance}m'),
@@ -322,9 +367,11 @@ class _StageAndControls extends StatelessWidget {
     required this.controller,
     required this.micOn,
     required this.cameraOn,
+    required this.screenShareOn,
     required this.handRaised,
     required this.onMic,
     required this.onCamera,
+    required this.onScreenShare,
     required this.onRaiseHand,
     required this.onAsk,
   });
@@ -335,9 +382,11 @@ class _StageAndControls extends StatelessWidget {
   final LiveSessionsController controller;
   final bool micOn;
   final bool cameraOn;
+  final bool screenShareOn;
   final bool handRaised;
   final VoidCallback onMic;
   final VoidCallback onCamera;
+  final VoidCallback onScreenShare;
   final VoidCallback onRaiseHand;
   final VoidCallback onAsk;
 
@@ -346,6 +395,9 @@ class _StageAndControls extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final fallbackLecturer = lecturer ?? LiveSessionParticipant(id: 'lecturer-${room.session.id}', sessionId: room.session.id, role: LiveSessionRole.lecturer, displayName: room.session.lecturerName, cameraEnabled: true, micEnabled: true);
     final self = participant ?? LiveSessionParticipant(id: 'student-preview', sessionId: room.session.id, role: LiveSessionRole.student, displayName: 'You', cameraEnabled: cameraOn, micEnabled: micOn);
+    final selfMedia = controller.mediaParticipantFor(self.id);
+    final showScreenShare = screenShareOn || liveSessionScreenShareTrackFor(selfMedia) != null;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(24), border: Border.all(color: cs.onSurface.withValues(alpha: 0.06))),
@@ -354,10 +406,14 @@ class _StageAndControls extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(22),
             child: Stack(children: [
-              Positioned.fill(child: LiveSessionVideoSurface(participant: fallbackLecturer, mediaParticipant: controller.mediaParticipantFor(fallbackLecturer.id), borderRadius: BorderRadius.circular(22))),
-              Positioned(left: 14, top: 14, child: _StagePill(text: room.session.isLiveAt(DateTime.now()) ? 'Live class' : room.session.statusLabelAt(DateTime.now()), icon: Icons.radio_button_checked_rounded)),
-              Positioned(left: 14, bottom: 14, right: 14, child: Text(room.session.lecturerName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18))),
-              Positioned(right: 14, bottom: 14, width: 150, height: 96, child: LiveSessionVideoSurface(participant: self, mediaParticipant: controller.mediaParticipantFor(self.id), borderRadius: BorderRadius.circular(18))),
+              Positioned.fill(
+                child: showScreenShare
+                    ? LiveSessionScreenShareSurface(participant: self, mediaParticipant: selfMedia, borderRadius: BorderRadius.circular(22))
+                    : LiveSessionVideoSurface(participant: fallbackLecturer, mediaParticipant: controller.mediaParticipantFor(fallbackLecturer.id), borderRadius: BorderRadius.circular(22)),
+              ),
+              Positioned(left: 14, top: 14, child: _StagePill(text: showScreenShare ? 'Your screen is shared' : (room.session.isLiveAt(DateTime.now()) ? 'Live class' : room.session.statusLabelAt(DateTime.now())), icon: showScreenShare ? Icons.screen_share_rounded : Icons.radio_button_checked_rounded)),
+              Positioned(left: 14, bottom: 14, right: 14, child: Text(showScreenShare ? 'Sharing your screen with lecturer' : room.session.lecturerName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18))),
+              Positioned(right: 14, bottom: 14, width: 150, height: 96, child: LiveSessionVideoSurface(participant: self, mediaParticipant: selfMedia, borderRadius: BorderRadius.circular(18))),
             ]),
           ),
         ),
@@ -367,6 +423,7 @@ class _StageAndControls extends StatelessWidget {
           child: Row(children: [
             _ControlButton(icon: micOn ? Icons.mic_rounded : Icons.mic_off_rounded, label: micOn ? 'Mute' : 'Unmute', selected: micOn, onTap: onMic),
             _ControlButton(icon: cameraOn ? Icons.videocam_rounded : Icons.videocam_off_rounded, label: cameraOn ? 'Camera' : 'Camera off', selected: cameraOn, onTap: onCamera),
+            _ControlButton(icon: screenShareOn ? Icons.stop_screen_share_rounded : Icons.screen_share_rounded, label: screenShareOn ? 'Stop share' : 'Share screen', selected: screenShareOn, onTap: onScreenShare),
             _ControlButton(icon: Icons.front_hand_rounded, label: handRaised ? 'Lower hand' : 'Raise hand', selected: handRaised, onTap: onRaiseHand),
             _ControlButton(icon: Icons.question_answer_outlined, label: 'Ask', onTap: onAsk),
           ]),
@@ -377,19 +434,7 @@ class _StageAndControls extends StatelessWidget {
 }
 
 class _StudentSidePanel extends StatelessWidget {
-  const _StudentSidePanel({
-    required this.room,
-    required this.participants,
-    required this.activePanel,
-    required this.onPanelChanged,
-    required this.chatController,
-    required this.questionController,
-    required this.noteController,
-    required this.onSendChat,
-    required this.onSendQuestion,
-    required this.onSaveNotes,
-  });
-
+  const _StudentSidePanel({required this.room, required this.participants, required this.activePanel, required this.onPanelChanged, required this.chatController, required this.questionController, required this.noteController, required this.onSendChat, required this.onSendQuestion, required this.onSaveNotes});
   final LiveSessionRoomState room;
   final List<LiveSessionParticipant> participants;
   final _StudentRoomPanel activePanel;
@@ -432,7 +477,6 @@ class _StudentSidePanel extends StatelessWidget {
       case _StudentRoomPanel.people:
         return _PeoplePanel(participants: participants);
       case _StudentRoomPanel.chat:
-      default:
         return _ChatPanel(room: room, controller: chatController, onSend: onSendChat);
     }
   }
@@ -443,29 +487,23 @@ class _ChatPanel extends StatelessWidget {
   final LiveSessionRoomState room;
   final TextEditingController controller;
   final VoidCallback onSend;
-
   @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      Expanded(
-        child: room.chatMessages.isEmpty
-            ? const _PanelEmpty(message: 'No chat message yet.')
-            : ListView.builder(
-                itemCount: room.chatMessages.length,
-                itemBuilder: (context, index) {
+  Widget build(BuildContext context) => Column(children: [
+        Expanded(
+          child: room.chatMessages.isEmpty
+              ? const _PanelEmpty(message: 'No chat message yet.')
+              : ListView.builder(itemCount: room.chatMessages.length, itemBuilder: (context, index) {
                   final item = room.chatMessages[index];
                   return _MessageBubble(title: item.senderName, body: item.message);
-                },
-              ),
-      ),
-      const SizedBox(height: 8),
-      Row(children: [
-        Expanded(child: TextField(controller: controller, minLines: 1, maxLines: 3, decoration: const InputDecoration(hintText: 'Type class message'))),
-        const SizedBox(width: 8),
-        IconButton.filled(onPressed: onSend, icon: const Icon(Icons.send_rounded)),
-      ]),
-    ]);
-  }
+                }),
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: TextField(controller: controller, minLines: 1, maxLines: 3, decoration: const InputDecoration(hintText: 'Type class message'))),
+          const SizedBox(width: 8),
+          IconButton.filled(onPressed: onSend, icon: const Icon(Icons.send_rounded)),
+        ]),
+      ]);
 }
 
 class _QuestionsPanel extends StatelessWidget {
@@ -473,57 +511,44 @@ class _QuestionsPanel extends StatelessWidget {
   final LiveSessionRoomState room;
   final TextEditingController controller;
   final VoidCallback onSend;
-
   @override
-  Widget build(BuildContext context) {
-    return Column(children: [
-      Expanded(
-        child: room.questions.isEmpty
-            ? const _PanelEmpty(message: 'No student question yet.')
-            : ListView.builder(
-                itemCount: room.questions.length,
-                itemBuilder: (context, index) {
+  Widget build(BuildContext context) => Column(children: [
+        Expanded(
+          child: room.questions.isEmpty
+              ? const _PanelEmpty(message: 'No student question yet.')
+              : ListView.builder(itemCount: room.questions.length, itemBuilder: (context, index) {
                   final item = room.questions[index];
                   return _MessageBubble(title: item.askedByName, body: item.isAnswered ? '${item.question}\n\nAnswer: ${item.answer}' : item.question);
-                },
-              ),
-      ),
-      const SizedBox(height: 8),
-      Row(children: [
-        Expanded(child: TextField(controller: controller, minLines: 1, maxLines: 3, decoration: const InputDecoration(hintText: 'Ask lecturer a question'))),
-        const SizedBox(width: 8),
-        IconButton.filled(onPressed: onSend, icon: const Icon(Icons.send_rounded)),
-      ]),
-    ]);
-  }
+                }),
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: TextField(controller: controller, minLines: 1, maxLines: 3, decoration: const InputDecoration(hintText: 'Ask lecturer a question'))),
+          const SizedBox(width: 8),
+          IconButton.filled(onPressed: onSend, icon: const Icon(Icons.send_rounded)),
+        ]),
+      ]);
 }
 
 class _NotesPanel extends StatelessWidget {
   const _NotesPanel({required this.controller, required this.onChanged});
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
-
   @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      expands: true,
-      minLines: null,
-      maxLines: null,
-      textAlignVertical: TextAlignVertical.top,
-      decoration: const InputDecoration(
-        hintText: 'Write personal notes during the live class...\n\nExamples:\n• Key definition\n• Lecturer explanation\n• Question to revise later',
-        alignLabelWithHint: true,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => TextField(
+        controller: controller,
+        onChanged: onChanged,
+        expands: true,
+        minLines: null,
+        maxLines: null,
+        textAlignVertical: TextAlignVertical.top,
+        decoration: const InputDecoration(hintText: 'Write personal notes during the live class...'),
+      );
 }
 
 class _PeoplePanel extends StatelessWidget {
   const _PeoplePanel({required this.participants});
   final List<LiveSessionParticipant> participants;
-
   @override
   Widget build(BuildContext context) {
     if (participants.isEmpty) return const _PanelEmpty(message: 'No participant yet.');
@@ -549,7 +574,6 @@ class _ControlButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final bool selected;
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -571,62 +595,52 @@ class _PanelChip extends StatelessWidget {
   final IconData icon;
   final bool selected;
   final VoidCallback onTap;
-
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(label: Text(label), avatar: Icon(icon, size: 18), selected: selected, onSelected: (_) => onTap()),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: ChoiceChip(label: Text(label), avatar: Icon(icon, size: 18), selected: selected, onSelected: (_) => onTap()),
+      );
 }
 
 class _HeaderPill extends StatelessWidget {
   const _HeaderPill({required this.icon, required this.label});
   final IconData icon;
   final String label;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(999)),
-      child: Row(children: [Icon(icon, color: Colors.white, size: 18), const SizedBox(width: 5), Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900))]),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(999)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: Colors.white, size: 18), const SizedBox(width: 5), Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900))]),
+      );
 }
 
 class _StagePill extends StatelessWidget {
   const _StagePill({required this.text, required this.icon});
   final String text;
   final IconData icon;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(999)),
-      child: Row(children: [Icon(icon, color: Colors.white, size: 16), const SizedBox(width: 6), Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900))]),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(999)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, color: Colors.white, size: 16), const SizedBox(width: 6), Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900))]),
+      );
 }
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.title, required this.body});
   final String title;
   final String body;
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(color: cs.onSurface.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(color: cs.surfaceContainerHighest.withValues(alpha: 0.62), borderRadius: BorderRadius.circular(16)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title, style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 4),
-        Text(body, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.76), fontWeight: FontWeight.w600, height: 1.30)),
+        Text(title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 3),
+        Text(body, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.72), fontWeight: FontWeight.w700, height: 1.30)),
       ]),
     );
   }
@@ -635,10 +649,6 @@ class _MessageBubble extends StatelessWidget {
 class _PanelEmpty extends StatelessWidget {
   const _PanelEmpty({required this.message});
   final String message;
-
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(child: Text(message, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.60), fontWeight: FontWeight.w700)));
-  }
+  Widget build(BuildContext context) => Center(child: Text(message, textAlign: TextAlign.center));
 }
