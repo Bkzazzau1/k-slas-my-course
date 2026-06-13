@@ -3,6 +3,7 @@ import 'package:my_courses/modules/fill_blank/binding/fill_blank_binding.dart';
 import 'package:my_courses/modules/fill_blank/view/fill_blank_view.dart';
 import 'package:my_courses/modules/assignments/binding/assignments_binding.dart';
 import 'package:my_courses/modules/assignments/view/assignments_pro_view.dart';
+import 'package:my_courses/modules/assignments/view/lecturer_assignments_portal_view.dart';
 
 import '../../modules/cbt/binding/cbt_binding.dart';
 import '../../modules/cbt/view/cbt_result_view.dart';
@@ -145,6 +146,11 @@ class AppPages {
     GetPage(
       name: Routes.assignments,
       page: () => const AssignmentsProView(),
+      binding: AssignmentsBinding(),
+    ),
+    GetPage(
+      name: Routes.lecturerAssignments,
+      page: () => const LecturerAssignmentsPortalView(),
       binding: AssignmentsBinding(),
     ),
     GetPage(
