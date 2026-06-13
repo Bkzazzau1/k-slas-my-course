@@ -7,19 +7,16 @@ import '../../../core/whiteboard/whiteboard_editor_sheet.dart';
 import '../../../core/whiteboard/whiteboard_models.dart';
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/models/assignment_model.dart';
-import '../../../data/services/assignment_lecturer_analytics_service.dart';
 import '../../../data/services/assignment_quality_service.dart';
 import '../../../data/services/assignment_receipt_service.dart';
 import '../../../data/services/assignment_submission_storage.dart';
 import '../controller/assignments_controller.dart';
-import 'assignments_view.dart';
 
 class AssignmentsProView extends GetView<AssignmentsController> {
   const AssignmentsProView({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Scaffold(
       body: LuxuryScaffold(
         safeArea: true,
@@ -30,12 +27,7 @@ class AssignmentsProView extends GetView<AssignmentsController> {
               child: Obx(
                 () => _AssignmentsProHeader(
                   providerLabel: controller.providerLabel.value,
-                  isLecturerMode: controller.isLecturerMode.value,
                   onBack: () => Get.back<void>(),
-                  onClassic: () => Get.to<void>(() => const AssignmentsView()),
-                  onRoleChanged: (lecturer) {
-                    controller.switchDemoRole(lecturer: lecturer);
-                  },
                 ),
               ),
             ),
@@ -57,10 +49,13 @@ class AssignmentsProView extends GetView<AssignmentsController> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 22),
                     children: [
-                      if (controller.isLecturerMode.value)
-                        _LecturerAssignmentDashboard(controller: controller)
-                      else
-                        _StudentAssignmentDashboard(controller: controller),
+                      _StudentAssignmentDashboard(controller: controller),
+                      const SizedBox(height: 12),
+                      _PortalNoticeCard(
+                        title: 'Student assignment portal',
+                        message:
+                            'This screen is for students only. Lecturers publish, review, and grade assignments from the separate lecturer portal.',
+                      ),
                       const SizedBox(height: 12),
                       _CourseFilterBar(
                         courses: courses,
@@ -117,17 +112,11 @@ class AssignmentsProView extends GetView<AssignmentsController> {
 class _AssignmentsProHeader extends StatelessWidget {
   const _AssignmentsProHeader({
     required this.providerLabel,
-    required this.isLecturerMode,
     required this.onBack,
-    required this.onClassic,
-    required this.onRoleChanged,
   });
 
   final String providerLabel;
-  final bool isLecturerMode;
   final VoidCallback onBack;
-  final VoidCallback onClassic;
-  final ValueChanged<bool> onRoleChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -157,7 +146,7 @@ class _AssignmentsProHeader extends StatelessWidget {
               const SizedBox(width: 10),
               const Expanded(
                 child: Text(
-                  'Assignments Pro',
+                  'Assignments',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
@@ -165,18 +154,12 @@ class _AssignmentsProHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              IconButton.filledTonal(
-                tooltip: 'Classic lecturer tools',
-                onPressed: onClassic,
-                icon: const Icon(Icons.tune_rounded),
-              ),
+              const Icon(Icons.school_outlined, color: Colors.white),
             ],
           ),
           const SizedBox(height: 10),
           Text(
-            isLecturerMode
-                ? 'Review coursework, monitor submissions, and use classic tools for publishing and grading.'
-                : 'Submit work with draft autosave, readiness checks, and official receipt evidence.',
+            'Submit work with draft autosave, readiness checks, whiteboard support, and official receipt evidence.',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.90),
               fontWeight: FontWeight.w700,
@@ -190,44 +173,6 @@ class _AssignmentsProHeader extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.78),
               fontWeight: FontWeight.w700,
               fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<bool>(
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                foregroundColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.selected)
-                      ? cs.primary
-                      : Colors.white,
-                ),
-                backgroundColor: WidgetStateProperty.resolveWith(
-                  (states) => states.contains(WidgetState.selected)
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.12),
-                ),
-                side: WidgetStateProperty.all(
-                  BorderSide(color: Colors.white.withValues(alpha: 0.24)),
-                ),
-              ),
-              segments: const [
-                ButtonSegment(
-                  value: false,
-                  icon: Icon(Icons.school_outlined, size: 18),
-                  label: Text('Student'),
-                ),
-                ButtonSegment(
-                  value: true,
-                  icon: Icon(Icons.co_present_outlined, size: 18),
-                  label: Text('Lecturer'),
-                ),
-              ],
-              selected: {isLecturerMode},
-              onSelectionChanged: (values) {
-                if (values.isNotEmpty) onRoleChanged(values.first);
-              },
             ),
           ),
         ],
@@ -260,40 +205,6 @@ class _StudentAssignmentDashboard extends StatelessWidget {
         _MetricData('Submitted', submitted.toString(), Icons.verified_rounded),
         _MetricData('Due soon', dueSoon.toString(), Icons.schedule_rounded),
         _MetricData('Overdue', overdue.toString(), Icons.warning_amber_rounded),
-      ],
-    );
-  }
-}
-
-class _LecturerAssignmentDashboard extends StatelessWidget {
-  const _LecturerAssignmentDashboard({required this.controller});
-
-  final AssignmentsController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final snapshot = AssignmentLecturerAnalyticsService.buildSnapshot(
-      assignments: controller.visibleAssignments,
-      submissions: controller.submissions,
-      grades: controller.grades.values.toList(),
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _MetricWrap(
-          items: [
-            _MetricData('Published', snapshot.totalAssignments.toString(), Icons.post_add_rounded),
-            _MetricData('Submissions', snapshot.totalSubmissions.toString(), Icons.cloud_done_rounded),
-            _MetricData('Pending grading', snapshot.pendingGrading.toString(), Icons.pending_actions_rounded),
-            _MetricData('Average', '${snapshot.averageScore}%', Icons.analytics_rounded),
-          ],
-        ),
-        const SizedBox(height: 10),
-        FilledButton.icon(
-          onPressed: () => Get.to<void>(() => const AssignmentsView()),
-          icon: const Icon(Icons.add_task_outlined),
-          label: const Text('Open classic lecturer publishing and grading tools'),
-        ),
       ],
     );
   }
@@ -348,6 +259,46 @@ class _MetricTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PortalNoticeCard extends StatelessWidget {
+  const _PortalNoticeCard({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, color: cs.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
           ),
         ],
       ),
