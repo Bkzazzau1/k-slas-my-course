@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../../data/models/live_session_models.dart';
 import '../widgets/live_class_attendance_report_overlay.dart';
+import '../widgets/live_class_malpractice_report_overlay.dart';
 import '../widgets/live_class_moderation_overlay.dart';
 import '../widgets/live_class_student_attendance_overlay.dart';
 import '../widgets/live_class_student_moderation_guard.dart';
@@ -41,18 +42,24 @@ class LiveSessionRoomView extends StatelessWidget {
         args['lecturerName']?.toString() ??
         'Course lecturer';
 
-    return LiveClassAttendanceReportOverlay(
+    return LiveClassMalpracticeReportOverlay(
       sessionId: sessionId,
+      reporterName: lecturerName,
+      reporterRole: role,
       enabled: role == LiveSessionRole.lecturer,
-      child: LiveClassModerationOverlay(
+      child: LiveClassAttendanceReportOverlay(
         sessionId: sessionId,
-        lecturerName: lecturerName,
         enabled: role == LiveSessionRole.lecturer,
-        child: LiveScreenShareApprovalOverlay(
+        child: LiveClassModerationOverlay(
           sessionId: sessionId,
           lecturerName: lecturerName,
           enabled: role == LiveSessionRole.lecturer,
-          child: const LiveClassroomProfessionalShell(),
+          child: LiveScreenShareApprovalOverlay(
+            sessionId: sessionId,
+            lecturerName: lecturerName,
+            enabled: role == LiveSessionRole.lecturer,
+            child: const LiveClassroomProfessionalShell(),
+          ),
         ),
       ),
     );
