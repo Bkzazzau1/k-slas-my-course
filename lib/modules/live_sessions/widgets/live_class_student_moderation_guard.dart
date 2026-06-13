@@ -31,6 +31,12 @@ class _LiveClassStudentModerationGuardState
   Timer? _timer;
   bool _isLeaving = false;
 
+  String get _participantId {
+    final active = _controller.activeParticipantId.value?.trim() ?? '';
+    if (active.isNotEmpty) return active;
+    return widget.participantId.trim();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -56,13 +62,12 @@ class _LiveClassStudentModerationGuardState
 
   Future<void> _applyCommands() async {
     if (!widget.enabled || _isLeaving) return;
-    if (widget.sessionId.trim().isEmpty || widget.participantId.trim().isEmpty) {
-      return;
-    }
+    final participantId = _participantId;
+    if (widget.sessionId.trim().isEmpty || participantId.isEmpty) return;
 
     final commands = LiveClassModerationService.pendingForParticipant(
       sessionId: widget.sessionId,
-      participantId: widget.participantId,
+      participantId: participantId,
     );
     if (commands.isEmpty) return;
 
