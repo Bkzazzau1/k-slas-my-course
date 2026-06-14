@@ -38,6 +38,8 @@ import '../../modules/results/view/results_view.dart';
 import '../../modules/settings/binding/settings_binding.dart';
 import '../../modules/settings/controller/settings_controller.dart';
 import '../../modules/settings/view/settings_view.dart';
+import '../../modules/student_services/view/internship_management_view.dart';
+import '../../modules/student_services/view/transcript_services_view.dart';
 import '../../modules/theory/binding/theory_binding.dart';
 import '../../modules/theory/view/theory_practice_view.dart';
 import '../../modules/theory_rewrite/binding/theory_rewrite_binding.dart';
@@ -65,6 +67,8 @@ class AppPages {
     GetPage(name: Routes.courseDetail, page: () => const CourseDetailView(), binding: CoursesBinding()),
     GetPage(name: Routes.academicRecord, page: () => const StudentAcademicRecordView(), binding: CoursesBinding()),
     GetPage(name: Routes.courseRegistration, page: () => const CourseRegistrationView(), binding: CoursesBinding()),
+    GetPage(name: Routes.internshipManagement, page: () => const InternshipManagementView()),
+    GetPage(name: Routes.transcriptServices, page: () => const TranscriptServicesView()),
     GetPage(name: Routes.chat, page: () => const ChatView(), binding: ChatBinding()),
     GetPage(name: Routes.practiceSetup, page: () => const PracticeSetupView(), binding: PracticeBinding()),
     GetPage(name: Routes.practiceSession, page: () => const PracticeSessionView(), binding: PracticeBinding()),
