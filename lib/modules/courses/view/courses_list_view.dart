@@ -64,6 +64,7 @@ class CoursesListView extends GetView<CoursesController> {
                       onReceipts: () => Get.toNamed(Routes.results),
                       onInternship: () => Get.toNamed(Routes.internshipManagement),
                       onTranscripts: () => Get.toNamed(Routes.transcriptServices),
+                      onSupport: () => Get.toNamed(Routes.studentSupport),
                     ),
                   ),
                 ),
@@ -179,7 +180,7 @@ class _LearningHubHeader extends StatelessWidget {
         ]),
         const SizedBox(height: 10),
         Text(
-          'Courses, registration, academic record, transcripts, internship, materials, assessments and learning tools organized in one student workspace.',
+          'Courses, registration, academic record, support, transcripts, internship, materials, assessments and learning tools organized in one student workspace.',
           style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700, height: 1.25),
         ),
         const SizedBox(height: 14),
@@ -277,6 +278,7 @@ class _QuickCourseActions extends StatelessWidget {
     required this.onReceipts,
     required this.onInternship,
     required this.onTranscripts,
+    required this.onSupport,
   });
   final VoidCallback onLive;
   final VoidCallback onCalendar;
@@ -285,6 +287,7 @@ class _QuickCourseActions extends StatelessWidget {
   final VoidCallback onReceipts;
   final VoidCallback onInternship;
   final VoidCallback onTranscripts;
+  final VoidCallback onSupport;
 
   @override
   Widget build(BuildContext context) {
@@ -293,6 +296,7 @@ class _QuickCourseActions extends StatelessWidget {
       return Wrap(spacing: 8, runSpacing: 8, children: [
         SizedBox(width: width, child: _MiniAction(icon: Icons.app_registration_rounded, label: 'Register', onTap: onRegister)),
         SizedBox(width: width, child: _MiniAction(icon: Icons.school_outlined, label: 'Record', onTap: onRecord)),
+        SizedBox(width: width, child: _MiniAction(icon: Icons.support_agent_outlined, label: 'Support', onTap: onSupport)),
         SizedBox(width: width, child: _MiniAction(icon: Icons.receipt_long_outlined, label: 'Transcript', onTap: onTranscripts)),
         SizedBox(width: width, child: _MiniAction(icon: Icons.work_outline, label: 'Internship', onTap: onInternship)),
         SizedBox(width: width, child: _MiniAction(icon: Icons.live_tv_outlined, label: 'Live', onTap: onLive)),
