@@ -49,6 +49,7 @@ import '../../modules/theory_rewrite/view/theory_rewrite_view.dart';
 import '../../modules/live_sessions/binding/live_sessions_binding.dart';
 import '../../modules/live_sessions/view/live_class_history_with_replay_view.dart';
 import '../../modules/live_sessions/view/live_class_replay_view.dart';
+import '../../modules/live_sessions/view/live_chief_overview_view.dart';
 import '../../modules/live_sessions/view/live_sessions_hub_view.dart';
 import '../../modules/live_sessions/view/live_session_room_view.dart';
 import '../../modules/timetable/binding/timetable_binding.dart';
@@ -61,31 +62,125 @@ import 'app_routes.dart';
 
 class AppPages {
   static final pages = <GetPage>[
-    GetPage(name: Routes.main, page: () => const MainNavView(), binding: _mainBinding()),
-    GetPage(name: Routes.mainNav, page: () => const MainNavView(), binding: _mainBinding()),
-    GetPage(name: Routes.dashboard, page: () => const DashboardView(), binding: DashboardBinding()),
-    GetPage(name: Routes.demoWalkthrough, page: () => const DemoWalkthroughView()),
-    GetPage(name: Routes.courses, page: () => const CoursesListView(), binding: CoursesBinding()),
-    GetPage(name: Routes.courseDetail, page: () => const CourseDetailView(), binding: CoursesBinding()),
-    GetPage(name: Routes.academicRecord, page: () => const StudentAcademicRecordView(), binding: CoursesBinding()),
-    GetPage(name: Routes.courseRegistration, page: () => const CourseRegistrationView(), binding: CoursesBinding()),
-    GetPage(name: Routes.internshipManagement, page: () => const InternshipManagementView()),
-    GetPage(name: Routes.transcriptServices, page: () => const TranscriptServicesView()),
-    GetPage(name: Routes.studentSupport, page: () => const StudentSupportView()),
-    GetPage(name: Routes.graduationMapping, page: () => const GraduationMappingView()),
-    GetPage(name: Routes.chat, page: () => const ChatView(), binding: ChatBinding()),
-    GetPage(name: Routes.practiceSetup, page: () => const PracticeSetupView(), binding: PracticeBinding()),
-    GetPage(name: Routes.practiceSession, page: () => const PracticeSessionView(), binding: PracticeBinding()),
-    GetPage(name: Routes.practiceResult, page: () => const PracticeResultView(), binding: PracticeBinding()),
-    GetPage(name: Routes.revision, page: () => const RevisionView(), binding: RevisionBinding()),
-    GetPage(name: Routes.settings, page: () => const SettingsView(), binding: SettingsBinding()),
-    GetPage(name: Routes.timetable, page: () => const TimetableView(), binding: TimetableBinding()),
-    GetPage(name: Routes.noticeboard, page: () => const NoticeboardView(), binding: NoticeboardBinding()),
-    GetPage(name: Routes.weakAreas, page: () => const WeakAreasView(), binding: WeakAreasBinding()),
-    GetPage(name: Routes.assignments, page: () => const AssignmentsProView(), binding: AssignmentsBinding()),
-    GetPage(name: Routes.results, page: () => const ResultsView(), binding: ResultsBinding()),
-    GetPage(name: Routes.notifications, page: () => const StudentNotificationsView()),
-    GetPage(name: '/fillblank/start', page: () => const FillBlankView(), binding: FillBlankBinding()),
+    GetPage(
+      name: Routes.main,
+      page: () => const MainNavView(),
+      binding: _mainBinding(),
+    ),
+    GetPage(
+      name: Routes.mainNav,
+      page: () => const MainNavView(),
+      binding: _mainBinding(),
+    ),
+    GetPage(
+      name: Routes.dashboard,
+      page: () => const DashboardView(),
+      binding: DashboardBinding(),
+    ),
+    GetPage(
+      name: Routes.demoWalkthrough,
+      page: () => const DemoWalkthroughView(),
+    ),
+    GetPage(
+      name: Routes.courses,
+      page: () => const CoursesListView(),
+      binding: CoursesBinding(),
+    ),
+    GetPage(
+      name: Routes.courseDetail,
+      page: () => const CourseDetailView(),
+      binding: CoursesBinding(),
+    ),
+    GetPage(
+      name: Routes.academicRecord,
+      page: () => const StudentAcademicRecordView(),
+      binding: CoursesBinding(),
+    ),
+    GetPage(
+      name: Routes.courseRegistration,
+      page: () => const CourseRegistrationView(),
+      binding: CoursesBinding(),
+    ),
+    GetPage(
+      name: Routes.internshipManagement,
+      page: () => const InternshipManagementView(),
+    ),
+    GetPage(
+      name: Routes.transcriptServices,
+      page: () => const TranscriptServicesView(),
+    ),
+    GetPage(
+      name: Routes.studentSupport,
+      page: () => const StudentSupportView(),
+    ),
+    GetPage(
+      name: Routes.graduationMapping,
+      page: () => const GraduationMappingView(),
+    ),
+    GetPage(
+      name: Routes.chat,
+      page: () => const ChatView(),
+      binding: ChatBinding(),
+    ),
+    GetPage(
+      name: Routes.practiceSetup,
+      page: () => const PracticeSetupView(),
+      binding: PracticeBinding(),
+    ),
+    GetPage(
+      name: Routes.practiceSession,
+      page: () => const PracticeSessionView(),
+      binding: PracticeBinding(),
+    ),
+    GetPage(
+      name: Routes.practiceResult,
+      page: () => const PracticeResultView(),
+      binding: PracticeBinding(),
+    ),
+    GetPage(
+      name: Routes.revision,
+      page: () => const RevisionView(),
+      binding: RevisionBinding(),
+    ),
+    GetPage(
+      name: Routes.settings,
+      page: () => const SettingsView(),
+      binding: SettingsBinding(),
+    ),
+    GetPage(
+      name: Routes.timetable,
+      page: () => const TimetableView(),
+      binding: TimetableBinding(),
+    ),
+    GetPage(
+      name: Routes.noticeboard,
+      page: () => const NoticeboardView(),
+      binding: NoticeboardBinding(),
+    ),
+    GetPage(
+      name: Routes.weakAreas,
+      page: () => const WeakAreasView(),
+      binding: WeakAreasBinding(),
+    ),
+    GetPage(
+      name: Routes.assignments,
+      page: () => const AssignmentsProView(),
+      binding: AssignmentsBinding(),
+    ),
+    GetPage(
+      name: Routes.results,
+      page: () => const ResultsView(),
+      binding: ResultsBinding(),
+    ),
+    GetPage(
+      name: Routes.notifications,
+      page: () => const StudentNotificationsView(),
+    ),
+    GetPage(
+      name: '/fillblank/start',
+      page: () => const FillBlankView(),
+      binding: FillBlankBinding(),
+    ),
     GetPage(
       name: Routes.cbtSetup,
       page: () {
@@ -95,17 +190,54 @@ class AppPages {
       },
       binding: CBTBinding(),
     ),
-    GetPage(name: Routes.cbtTake, page: () => const CBTTakeView(), binding: CBTBinding()),
+    GetPage(
+      name: Routes.cbtTake,
+      page: () => const CBTTakeView(),
+      binding: CBTBinding(),
+    ),
     GetPage(name: Routes.cbtResult, page: CBTResultView.new),
-    GetPage(name: Routes.theoryPractice, page: () => const TheoryPracticeView(), binding: TheoryBinding()),
-    GetPage(name: Routes.theoryRewrite, page: () => const TheoryRewriteView(), binding: TheoryRewriteBinding()),
-    GetPage(name: Routes.examSetup, page: () => const ExamSetupView(), binding: ExamBinding()),
+    GetPage(
+      name: Routes.theoryPractice,
+      page: () => const TheoryPracticeView(),
+      binding: TheoryBinding(),
+    ),
+    GetPage(
+      name: Routes.theoryRewrite,
+      page: () => const TheoryRewriteView(),
+      binding: TheoryRewriteBinding(),
+    ),
+    GetPage(
+      name: Routes.examSetup,
+      page: () => const ExamSetupView(),
+      binding: ExamBinding(),
+    ),
     GetPage(name: Routes.examRun, page: () => const ExamRunView()),
     GetPage(name: Routes.examResult, page: () => const ExamResultView()),
-    GetPage(name: Routes.liveSessions, page: () => const LiveSessionsHubView(), binding: LiveSessionsBinding()),
-    GetPage(name: Routes.liveSessionRoom, page: () => const LiveSessionRoomView(), binding: LiveSessionsBinding()),
-    GetPage(name: Routes.liveClassHistory, page: () => const LiveClassHistoryWithReplayView(), binding: LiveSessionsBinding()),
-    GetPage(name: Routes.liveSessionReplay, page: () => const LiveClassReplayView(), binding: LiveSessionsBinding()),
+    GetPage(
+      name: Routes.liveSessions,
+      page: () => const LiveSessionsHubView(),
+      binding: LiveSessionsBinding(),
+    ),
+    GetPage(
+      name: Routes.liveSessionRoom,
+      page: () => const LiveSessionRoomView(),
+      binding: LiveSessionsBinding(),
+    ),
+    GetPage(
+      name: Routes.liveClassHistory,
+      page: () => const LiveClassHistoryWithReplayView(),
+      binding: LiveSessionsBinding(),
+    ),
+    GetPage(
+      name: Routes.liveSessionReplay,
+      page: () => const LiveClassReplayView(),
+      binding: LiveSessionsBinding(),
+    ),
+    GetPage(
+      name: Routes.liveChiefOverview,
+      page: () => const LiveChiefOverviewView(),
+      binding: LiveSessionsBinding(),
+    ),
   ];
 
   static BindingsBuilder _mainBinding() {

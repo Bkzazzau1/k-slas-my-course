@@ -13,7 +13,11 @@ import '../view/weekly_note_reader_view.dart';
 import '../../video_lectures/controller/video_lectures_controller.dart';
 
 class StudyTab extends StatelessWidget {
-  const StudyTab({super.key, required this.course, this.chromeCollapsed = false});
+  const StudyTab({
+    super.key,
+    required this.course,
+    this.chromeCollapsed = false,
+  });
 
   final CourseModel course;
   final bool chromeCollapsed;
@@ -30,20 +34,31 @@ class StudyTab extends StatelessWidget {
 
     return Obx(() {
       final allLectures = controller.lecturesForCourse(course.code);
-      final lectures = controller.lecturesForCourse(course.code, category: category);
+      final lectures = controller.lecturesForCourse(
+        course.code,
+        category: category,
+      );
 
       if (allLectures.isEmpty && !controller.isLoading.value) {
         controller.loadLectures(courseCode: course.code);
       }
 
       return FutureBuilder<List<CourseMaterialModel>>(
-        future: CourseMaterialService.gateway.fetchMaterials(courseCode: course.code),
+        future: CourseMaterialService.gateway.fetchMaterials(
+          courseCode: course.code,
+        ),
         builder: (context, snapshot) {
           final materials = snapshot.data ?? const <CourseMaterialModel>[];
-          final loadingMaterials = snapshot.connectionState == ConnectionState.waiting;
-          final watched = lectures.where((lecture) => lecture.isWatchedBy(studentId)).length;
-          final downloadable = materials.where((material) => material.allowDownload).length;
-          final totalItems = materials.length + lectures.length + weeklyNotes.length;
+          final loadingMaterials =
+              snapshot.connectionState == ConnectionState.waiting;
+          final watched = lectures
+              .where((lecture) => lecture.isWatchedBy(studentId))
+              .length;
+          final downloadable = materials
+              .where((material) => material.allowDownload)
+              .length;
+          final totalItems =
+              materials.length + lectures.length + weeklyNotes.length;
 
           return ListView(
             padding: EdgeInsets.fromLTRB(16, chromeCollapsed ? 4 : 14, 16, 18),
@@ -71,28 +86,39 @@ class StudyTab extends StatelessWidget {
               else ...[
                 _SectionHeader(
                   title: 'Weekly study notes',
-                  subtitle: '${weeklyNotes.length} weeks • structured notes for the semester',
+                  subtitle:
+                      '${weeklyNotes.length} weeks • structured notes for the semester',
                 ),
                 const SizedBox(height: 10),
-                for (final note in weeklyNotes) _WeeklyNoteCard(note: note, courseCode: course.code),
+                for (final note in weeklyNotes)
+                  _WeeklyNoteCard(note: note, courseCode: course.code),
                 const SizedBox(height: 10),
                 _SectionHeader(
                   title: 'Course materials',
-                  subtitle: '${materials.length} item${materials.length == 1 ? '' : 's'} • $downloadable offline-ready',
+                  subtitle:
+                      '${materials.length} item${materials.length == 1 ? '' : 's'} • $downloadable offline-ready',
                 ),
                 const SizedBox(height: 10),
                 if (materials.isEmpty)
-                  const _MiniEmpty(message: 'No additional document or link material has been published yet.')
+                  const _MiniEmpty(
+                    message:
+                        'No additional document or link material has been published yet.',
+                  )
                 else
-                  for (final material in materials) _MaterialStudyTile(material: material),
+                  for (final material in materials)
+                    _MaterialStudyTile(material: material),
                 const SizedBox(height: 10),
                 _SectionHeader(
                   title: 'Lecture videos',
-                  subtitle: '${lectures.length} lecture${lectures.length == 1 ? '' : 's'} • $watched completed',
+                  subtitle:
+                      '${lectures.length} lecture${lectures.length == 1 ? '' : 's'} • $watched completed',
                 ),
                 const SizedBox(height: 10),
                 if (lectures.isEmpty)
-                  const _MiniEmpty(message: 'No video lecture is available for your student category yet.')
+                  const _MiniEmpty(
+                    message:
+                        'No video lecture is available for your student category yet.',
+                  )
                 else
                   for (final lecture in lectures)
                     _LectureStudyTile(
@@ -152,7 +178,11 @@ class StudyTab extends StatelessWidget {
       (index) => _WeeklyNote(
         week: index + 1,
         title: topics[index],
-        status: index < 5 ? _WeekStatus.available : index == 5 ? _WeekStatus.current : _WeekStatus.locked,
+        status: index < 5
+            ? _WeekStatus.available
+            : index == 5
+            ? _WeekStatus.current
+            : _WeekStatus.locked,
         offlineReady: index < 6,
       ),
     );
@@ -185,30 +215,84 @@ class _StudyOverviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
-        boxShadow: [BoxShadow(blurRadius: 24, offset: const Offset(0, 14), color: cs.primary.withValues(alpha: 0.15))],
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 24,
+            offset: const Offset(0, 14),
+            color: cs.primary.withValues(alpha: 0.15),
+          ),
+        ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          CircleAvatar(radius: 25, backgroundColor: Colors.white.withValues(alpha: 0.18), child: const Icon(Icons.menu_book_outlined, color: Colors.white)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(course.code, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
-            const SizedBox(height: 3),
-            Text('Study workspace', style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700)),
-          ])),
-          Text('${course.progress}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26)),
-        ]),
-        const SizedBox(height: 14),
-        ClipRRect(borderRadius: BorderRadius.circular(999), child: LinearProgressIndicator(value: progress, minHeight: 10, backgroundColor: Colors.white.withValues(alpha: 0.20))),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _HeroPill(label: '$weeklyNoteCount weekly notes'),
-          _HeroPill(label: '$materialCount materials'),
-          _HeroPill(label: '$lectureCount videos'),
-          _HeroPill(label: '$watchedCount watched'),
-          _HeroPill(label: '$downloadableCount offline-ready'),
-        ]),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 25,
+                backgroundColor: Colors.white.withValues(alpha: 0.18),
+                child: const Icon(
+                  Icons.menu_book_outlined,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      course.code,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Study workspace',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.90),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '${course.progress}%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 26,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 10,
+              backgroundColor: Colors.white.withValues(alpha: 0.20),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _HeroPill(label: '$weeklyNoteCount weekly notes'),
+              _HeroPill(label: '$materialCount materials'),
+              _HeroPill(label: '$lectureCount videos'),
+              _HeroPill(label: '$watchedCount watched'),
+              _HeroPill(label: '$downloadableCount offline-ready'),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -221,8 +305,19 @@ class _HeroPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.17), borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.white.withValues(alpha: 0.22))),
-      child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.17),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }
@@ -262,44 +357,110 @@ class _WeeklyNoteCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: color.withValues(alpha: 0.14))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(width: 46, height: 46, alignment: Alignment.center, decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(16)), child: Text('W${note.week}', style: TextStyle(color: color, fontWeight: FontWeight.w900))),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(note.title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
-            const SizedBox(height: 5),
-            Text('Weekly lecturer note with key points, examples, and revision focus.', maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30)),
-          ])),
-        ]),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _Badge(text: statusText, color: color),
-          _Badge(text: note.offlineReady ? 'Offline ready' : 'Online only', color: note.offlineReady ? Colors.green.shade700 : cs.primary),
-          _Badge(text: 'Study note', color: cs.secondary),
-        ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: FilledButton.icon(
-              onPressed: note.status == _WeekStatus.locked
-                  ? null
-                  : () => Get.to(() => WeeklyNoteReaderView(courseCode: courseCode, week: note.week, title: note.title, offlineReady: note.offlineReady, statusLabel: statusText)),
-              icon: const Icon(Icons.menu_book_outlined),
-              label: const Text('Open note'),
-            ),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  'W${note.week}',
+                  style: TextStyle(color: color, fontWeight: FontWeight.w900),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      note.title,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Weekly lecturer note with key points, examples, and revision focus.',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.70),
+                        fontWeight: FontWeight.w600,
+                        height: 1.30,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: note.offlineReady ? () => Get.snackbar('Offline saved', 'Week ${note.week} note is ready offline.', snackPosition: SnackPosition.BOTTOM) : null,
-              icon: const Icon(Icons.download_rounded),
-              label: const Text('Save offline'),
-            ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _Badge(text: statusText, color: color),
+              _Badge(
+                text: note.offlineReady ? 'Offline ready' : 'Online only',
+                color: note.offlineReady ? Colors.green.shade700 : cs.primary,
+              ),
+              _Badge(text: 'Study note', color: cs.secondary),
+            ],
           ),
-        ]),
-      ]),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: note.status == _WeekStatus.locked
+                      ? null
+                      : () => Get.to(
+                          () => WeeklyNoteReaderView(
+                            courseCode: courseCode,
+                            week: note.week,
+                            title: note.title,
+                            offlineReady: note.offlineReady,
+                            statusLabel: statusText,
+                          ),
+                        ),
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: const Text('Open note'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: note.offlineReady
+                      ? () => Get.snackbar(
+                          'Offline saved',
+                          'Week ${note.week} note is ready offline.',
+                          snackPosition: SnackPosition.BOTTOM,
+                        )
+                      : null,
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Save offline'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -310,18 +471,45 @@ class _StudyActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      Expanded(child: _ActionButton(icon: Icons.fact_check_outlined, label: 'Assessment', onTap: () => Get.toNamed(Routes.cbtSetup, arguments: {'courseCode': course.code}))),
-      const SizedBox(width: 8),
-      Expanded(child: _ActionButton(icon: Icons.live_tv_outlined, label: 'Live class', onTap: () => Get.toNamed(Routes.liveSessions))),
-      const SizedBox(width: 8),
-      Expanded(child: _ActionButton(icon: Icons.receipt_long_outlined, label: 'Receipts', onTap: () => Get.toNamed(Routes.results))),
-    ]);
+    return Row(
+      children: [
+        Expanded(
+          child: _ActionButton(
+            icon: Icons.fact_check_outlined,
+            label: 'Assessment',
+            onTap: () => Get.toNamed(
+              Routes.cbtSetup,
+              arguments: {'courseCode': course.code},
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _ActionButton(
+            icon: Icons.live_tv_outlined,
+            label: 'Live class',
+            onTap: () => Get.toNamed(Routes.liveSessions),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _ActionButton(
+            icon: Icons.receipt_long_outlined,
+            label: 'Receipts',
+            onTap: () => Get.toNamed(Routes.results),
+          ),
+        ),
+      ],
+    );
   }
 }
 
 class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.icon, required this.label, required this.onTap});
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
@@ -334,12 +522,27 @@ class _ActionButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(18),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(18), border: Border.all(color: cs.primary.withValues(alpha: 0.12))),
-        child: Column(children: [
-          Icon(icon, color: cs.primary),
-          const SizedBox(height: 6),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 12)),
-        ]),
+        decoration: BoxDecoration(
+          color: cs.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cs.primary.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: cs.primary),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -351,21 +554,39 @@ class _MaterialStudyTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final type = material.materialType.toLowerCase();
     final isLink = type == 'link';
     final isPdf = type.contains('pdf') || type.contains('document');
     return _SimpleStudyTile(
-      icon: isLink ? Icons.link_rounded : isPdf ? Icons.picture_as_pdf_outlined : Icons.description_outlined,
+      icon: isLink
+          ? Icons.link_rounded
+          : isPdf
+          ? Icons.picture_as_pdf_outlined
+          : Icons.description_outlined,
       title: material.title,
       subtitle: material.description,
-      badges: [material.materialType.toUpperCase(), material.allowDownload ? 'Download allowed' : 'View only'],
+      badges: [
+        material.materialType.toUpperCase(),
+        material.allowDownload ? 'Download allowed' : 'View only',
+      ],
       primaryLabel: 'Open',
-      primaryIcon: isLink ? Icons.open_in_new_rounded : Icons.visibility_outlined,
-      onPrimary: () => Get.snackbar('Material', 'Opening ${material.title}', snackPosition: SnackPosition.BOTTOM),
+      primaryIcon: isLink
+          ? Icons.open_in_new_rounded
+          : Icons.visibility_outlined,
+      onPrimary: () => Get.snackbar(
+        'Material',
+        'Opening ${material.title}',
+        snackPosition: SnackPosition.BOTTOM,
+      ),
       secondaryLabel: 'Save offline',
       secondaryIcon: Icons.download_rounded,
-      onSecondary: material.allowDownload ? () => Get.snackbar('Offline saved', '${material.title} is ready for offline reading.', snackPosition: SnackPosition.BOTTOM) : null,
+      onSecondary: material.allowDownload
+          ? () => Get.snackbar(
+              'Offline saved',
+              '${material.title} is ready for offline reading.',
+              snackPosition: SnackPosition.BOTTOM,
+            )
+          : null,
     );
   }
 }
@@ -378,16 +599,26 @@ class _LectureStudyTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SimpleStudyTile(
-      icon: watched ? Icons.check_circle_outline_rounded : Icons.play_circle_outline_rounded,
+      icon: watched
+          ? Icons.check_circle_outline_rounded
+          : Icons.play_circle_outline_rounded,
       title: lecture.title,
-      subtitle: '${watched ? 'Completed' : 'Pending'} • ${lecture.durationMinutes} min\n${lecture.subtitle}',
-      badges: [watched ? 'Watched' : 'Pending', '${lecture.durationMinutes} min'],
+      subtitle:
+          '${watched ? 'Completed' : 'Pending'} • ${lecture.durationMinutes} min\n${lecture.subtitle}',
+      badges: [
+        watched ? 'Watched' : 'Pending',
+        '${lecture.durationMinutes} min',
+      ],
       primaryLabel: watched ? 'Replay' : 'Watch',
       primaryIcon: watched ? Icons.replay_rounded : Icons.play_arrow_rounded,
       onPrimary: () => Get.toNamed(Routes.liveSessions),
       secondaryLabel: 'Offline',
       secondaryIcon: Icons.download_rounded,
-      onSecondary: () => Get.snackbar('Offline video', 'Lecture download will sync when backend storage is connected.', snackPosition: SnackPosition.BOTTOM),
+      onSecondary: () => Get.snackbar(
+        'Offline video',
+        'Lecture download will sync when backend storage is connected.',
+        snackPosition: SnackPosition.BOTTOM,
+      ),
     );
   }
 }
@@ -423,26 +654,85 @@ class _SimpleStudyTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(18), border: Border.all(color: cs.onSurface.withValues(alpha: 0.06))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(width: 46, height: 46, decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(16)), child: Icon(icon, color: cs.primary)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
-            const SizedBox(height: 5),
-            Text(subtitle, maxLines: 3, overflow: TextOverflow.ellipsis, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30)),
-          ])),
-        ]),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: badges.map((text) => _Badge(text: text, color: cs.primary)).toList()),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: FilledButton.icon(onPressed: onPrimary, icon: Icon(primaryIcon), label: Text(primaryLabel))),
-          const SizedBox(width: 10),
-          Expanded(child: OutlinedButton.icon(onPressed: onSecondary, icon: Icon(secondaryIcon), label: Text(secondaryLabel))),
-        ]),
-      ]),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: cs.primary),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      subtitle,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.70),
+                        fontWeight: FontWeight.w600,
+                        height: 1.30,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: badges
+                .map((text) => _Badge(text: text, color: cs.primary))
+                .toList(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onPrimary,
+                  icon: Icon(primaryIcon),
+                  label: Text(primaryLabel),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onSecondary,
+                  icon: Icon(secondaryIcon),
+                  label: Text(secondaryLabel),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -456,14 +746,35 @@ class _EmptyStudyState extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(20), border: Border.all(color: cs.onSurface.withValues(alpha: 0.06))),
-      child: Column(children: [
-        Icon(Icons.menu_book_outlined, size: 42, color: cs.primary),
-        const SizedBox(height: 12),
-        Text('No study material yet', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 17)),
-        const SizedBox(height: 7),
-        Text('No lecturer-published study material is available for $courseCode yet. Check again later or open live classes and assessments.', textAlign: TextAlign.center, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30)),
-      ]),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.menu_book_outlined, size: 42, color: cs.primary),
+          const SizedBox(height: 12),
+          Text(
+            'No study material yet',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(
+            'No lecturer-published study material is available for $courseCode yet. Check again later or open live classes and assessments.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.70),
+              fontWeight: FontWeight.w600,
+              height: 1.30,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -478,8 +789,18 @@ class _MiniEmpty extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: cs.onSurface.withValues(alpha: 0.03), borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.onSurface.withValues(alpha: 0.06))),
-      child: Text(message, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.68), fontWeight: FontWeight.w700)),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+      ),
+      child: Text(
+        message,
+        style: TextStyle(
+          color: cs.onSurface.withValues(alpha: 0.68),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -492,11 +813,27 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface)),
-      const SizedBox(height: 6),
-      Text(subtitle, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600)),
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
+            color: cs.onSurface,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.70),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -509,14 +846,30 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withValues(alpha: 0.14))),
-      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.14)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w900,
+          fontSize: 11,
+        ),
+      ),
     );
   }
 }
 
 class _WeeklyNote {
-  const _WeeklyNote({required this.week, required this.title, required this.status, required this.offlineReady});
+  const _WeeklyNote({
+    required this.week,
+    required this.title,
+    required this.status,
+    required this.offlineReady,
+  });
   final int week;
   final String title;
   final _WeekStatus status;

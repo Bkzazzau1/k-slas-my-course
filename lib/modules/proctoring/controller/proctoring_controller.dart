@@ -59,7 +59,9 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
   static const int _strictStrikeLimit = 2;
   static const int _multiFaceStrikeLimit = 2;
   static const int _integrityTerminationScore = 40;
-  static const MethodChannel _clipboardChannel = MethodChannel('k_slas/clipboard');
+  static const MethodChannel _clipboardChannel = MethodChannel(
+    'k_slas/clipboard',
+  );
 
   Timer? _scanTimer;
   VoidCallback? _onAutoSubmit;
@@ -115,8 +117,10 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     copyPasteBlocked.value = level != AssessmentIntegrityLevel.objectiveQuiz;
     sessionTerminated.value = false;
     terminationReason.value = '';
-    examMonitoringArmed.value = level != AssessmentIntegrityLevel.highStakesExam;
-    activeSessionId.value = '${DateTime.now().millisecondsSinceEpoch}-${level.name}';
+    examMonitoringArmed.value =
+        level != AssessmentIntegrityLevel.highStakesExam;
+    activeSessionId.value =
+        '${DateTime.now().millisecondsSinceEpoch}-${level.name}';
     _terminationHandled = false;
     _autoSubmitted = false;
     _onAutoSubmit = onAutoSubmit;
@@ -185,20 +189,29 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     VoidCallback? onVerified,
   }) async {
     await startSession(level: AssessmentIntegrityLevel.highStakesExam);
-    final verified = await Get.dialog<bool>(
+    final verified =
+        await Get.dialog<bool>(
           ExamStartDialog(examId: examId),
           barrierDismissible: false,
         ) ??
         false;
 
     if (!verified) {
-      _logViolation('Exam start sequence failed. Launch blocked.', penalty: 25, alert: true);
+      _logViolation(
+        'Exam start sequence failed. Launch blocked.',
+        penalty: 25,
+        alert: true,
+      );
       await stopSession(silent: true);
       return false;
     }
 
     if (!examStartupScanCompleted.value) {
-      _logViolation('Exam launch blocked: environment scan was not completed.', penalty: 25, alert: true);
+      _logViolation(
+        'Exam launch blocked: environment scan was not completed.',
+        penalty: 25,
+        alert: true,
+      );
       await stopSession(silent: true);
       return false;
     }
@@ -220,23 +233,29 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
       onSessionTerminated: onSessionTerminated,
     );
 
-    final verified = await Get.dialog<bool>(
-          ExamStartDialog(
-            examId: assessmentId,
-            sessionLabel: 'Assessment',
-          ),
+    final verified =
+        await Get.dialog<bool>(
+          ExamStartDialog(examId: assessmentId, sessionLabel: 'Assessment'),
           barrierDismissible: false,
         ) ??
         false;
 
     if (!verified) {
-      _logViolation('Graded assessment verification failed. Launch blocked.', penalty: 25, alert: true);
+      _logViolation(
+        'Graded assessment verification failed. Launch blocked.',
+        penalty: 25,
+        alert: true,
+      );
       await stopSession(silent: true);
       return false;
     }
 
     if (!examStartupScanCompleted.value) {
-      _logViolation('Graded assessment blocked: environment scan was not completed.', penalty: 25, alert: true);
+      _logViolation(
+        'Graded assessment blocked: environment scan was not completed.',
+        penalty: 25,
+        alert: true,
+      );
       await stopSession(silent: true);
       return false;
     }
@@ -253,7 +272,9 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<bool> verifyIdentityAndEnvironment() async {
-    requestEnvironmentScan('Complete the live environment scan before continuing.');
+    requestEnvironmentScan(
+      'Complete the live environment scan before continuing.',
+    );
     _startupEnvironmentScanCompleter = Completer<bool>();
     return _startupEnvironmentScanCompleter!.future.timeout(
       const Duration(minutes: 4),
@@ -289,18 +310,28 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
       return;
     }
     final effectivePenalty = _isStrictSession && penalty == 0 ? 8 : penalty;
-    _logViolation(reason, penalty: effectivePenalty, alert: alert || _isStrictSession);
+    _logViolation(
+      reason,
+      penalty: effectivePenalty,
+      alert: alert || _isStrictSession,
+    );
     _terminateIfIntegrityTooLow(reason);
   }
 
   void handleViolation(String type) {
     strictViolationStrikes.value += 1;
-    _logViolation('Strict violation: unauthorized $type detected.', penalty: 25, alert: true);
+    _logViolation(
+      'Strict violation: unauthorized $type detected.',
+      penalty: 25,
+      alert: true,
+    );
     if (strictViolationStrikes.value >= _strictStrikeLimit) {
       _terminateSession('Repeated strict violation: $type');
       return;
     }
-    forceBackgroundScan('Unauthorized $type detected. Complete a fresh environment scan before continuing.');
+    forceBackgroundScan(
+      'Unauthorized $type detected. Complete a fresh environment scan before continuing.',
+    );
   }
 
   Future<void> verifyNetworkIntegrity() async {
@@ -313,12 +344,18 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     if (!_isStrictSession) return;
     if (faces.length > 1) {
       multiFaceStrikes.value += 1;
-      _logViolation('Multiple faces detected (${multiFaceStrikes.value}/$_multiFaceStrikeLimit).', penalty: 20, alert: true);
+      _logViolation(
+        'Multiple faces detected (${multiFaceStrikes.value}/$_multiFaceStrikeLimit).',
+        penalty: 20,
+        alert: true,
+      );
       if (multiFaceStrikes.value >= _multiFaceStrikeLimit) {
         _terminateSession('Repeated multiple-face detection.');
         return;
       }
-      forceBackgroundScan('Multiple faces detected. Clear the environment and rescan.');
+      forceBackgroundScan(
+        'Multiple faces detected. Clear the environment and rescan.',
+      );
     }
   }
 
@@ -362,15 +399,27 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
   Future<void> completeEnvironmentScan() async {
     if (scanProgress.value < 1.0) return;
     if (!scanRotationConfirmed.value) {
-      _logViolation('Environment scan rejected: full room rotation not confirmed.', penalty: 15, alert: true);
+      _logViolation(
+        'Environment scan rejected: full room rotation not confirmed.',
+        penalty: 15,
+        alert: true,
+      );
       return;
     }
     if (scanLightingScore.value < _minimumLightingScore) {
-      _logViolation('Environment scan rejected: lighting below strict threshold.', penalty: 15, alert: true);
+      _logViolation(
+        'Environment scan rejected: lighting below strict threshold.',
+        penalty: 15,
+        alert: true,
+      );
       return;
     }
     if (scanForbiddenObjects.isNotEmpty) {
-      _logViolation('Environment scan rejected: unauthorized item detected (${scanForbiddenObjects.join(', ')}).', penalty: 25, alert: true);
+      _logViolation(
+        'Environment scan rejected: unauthorized item detected (${scanForbiddenObjects.join(', ')}).',
+        penalty: 25,
+        alert: true,
+      );
       return;
     }
 
@@ -382,7 +431,11 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     examStartupScanCompleted.value = true;
     _resumeExamClock();
     _resolveStartupEnvironmentScan(success: true);
-    _logViolation('Environment scan completed successfully.', penalty: 0, alert: false);
+    _logViolation(
+      'Environment scan completed successfully.',
+      penalty: 0,
+      alert: false,
+    );
   }
 
   Future<void> resumeExamAfterScan() async {
@@ -474,17 +527,27 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     terminationReason.value = reason;
     _resolveStartupEnvironmentScan(success: false);
     _logViolation('Session terminated: $reason', penalty: 100, alert: false);
+    if (!_autoSubmitted) {
+      _autoSubmitted = true;
+      _onAutoSubmit?.call();
+    }
     _onSessionTerminated?.call();
   }
 
   void _terminateIfIntegrityTooLow(String reason) {
     if (!_isStrictSession || _terminationHandled) return;
     if (integrityScore.value <= _integrityTerminationScore) {
-      _terminateSession('Integrity score fell below strict threshold after: $reason');
+      _terminateSession(
+        'Integrity score fell below strict threshold after: $reason',
+      );
     }
   }
 
-  void _logViolation(String reason, {required int penalty, required bool alert}) {
+  void _logViolation(
+    String reason, {
+    required int penalty,
+    required bool alert,
+  }) {
     final stamp = DateTime.now().toIso8601String();
     violationLog.insert(0, '$stamp • $reason');
     if (penalty > 0) {
@@ -511,13 +574,23 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!shieldActive.value || !examStartupScanCompleted.value) return;
-    final leaving = state == AppLifecycleState.inactive || state == AppLifecycleState.paused;
+    final leaving =
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused;
     if (leaving) {
       appInBackground.value = true;
       backgroundExitStrikes.value += 1;
-      final penalty = currentLevel.value == AssessmentIntegrityLevel.highStakesExam ? 35 : 25;
-      _logViolation('App moved away from protected session (${backgroundExitStrikes.value}/$_strictStrikeLimit).', penalty: penalty, alert: true);
-      if (_isStrictSession && backgroundExitStrikes.value >= _strictStrikeLimit) {
+      final penalty =
+          currentLevel.value == AssessmentIntegrityLevel.highStakesExam
+          ? 35
+          : 25;
+      _logViolation(
+        'App moved away from protected session (${backgroundExitStrikes.value}/$_strictStrikeLimit).',
+        penalty: penalty,
+        alert: true,
+      );
+      if (_isStrictSession &&
+          backgroundExitStrikes.value >= _strictStrikeLimit) {
         _terminateSession('Repeated app background/focus loss.');
       }
     } else if (state == AppLifecycleState.resumed) {

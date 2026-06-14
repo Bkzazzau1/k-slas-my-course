@@ -21,7 +21,8 @@ class EssayMarkingService {
         scoredMarks: 0,
         keywordChecks: question.expectedKeywords
             .map(
-              (k) => KeywordCheck(keyword: k, found: false, note: _keywordNote(k)),
+              (k) =>
+                  KeywordCheck(keyword: k, found: false, note: _keywordNote(k)),
             )
             .toList(),
         feedback:
@@ -50,13 +51,18 @@ class EssayMarkingService {
     for (final kw in expected) {
       final found = _containsKeyword(normAnswer, kw);
       if (found) foundCount++;
-      checks.add(KeywordCheck(keyword: kw, found: found, note: _keywordNote(kw)));
+      checks.add(
+        KeywordCheck(keyword: kw, found: found, note: _keywordNote(kw)),
+      );
     }
 
     final ratio = foundCount / expected.length;
-    final scored = (total * ratio).round().clamp(0, total) as int;
+    final scored = (total * ratio).round().clamp(0, total);
 
-    final missing = checks.where((c) => !c.found).map((c) => c.keyword).toList();
+    final missing = checks
+        .where((c) => !c.found)
+        .map((c) => c.keyword)
+        .toList();
     final matched = checks.where((c) => c.found).map((c) => c.keyword).toList();
 
     return TheoryMarkResult(
@@ -86,13 +92,17 @@ class EssayMarkingService {
 
     if (matched.isNotEmpty) {
       buf.writeln('Strong points included:');
-      buf.writeln('- ${matched.take(8).join(', ')}${matched.length > 8 ? '...' : ''}');
+      buf.writeln(
+        '- ${matched.take(8).join(', ')}${matched.length > 8 ? '...' : ''}',
+      );
       buf.writeln('');
     }
 
     if (missing.isNotEmpty) {
       buf.writeln('Expected points not clearly covered:');
-      buf.writeln('- ${missing.take(10).join(', ')}${missing.length > 10 ? '...' : ''}');
+      buf.writeln(
+        '- ${missing.take(10).join(', ')}${missing.length > 10 ? '...' : ''}',
+      );
       buf.writeln('');
     }
 
@@ -101,7 +111,9 @@ class EssayMarkingService {
     buf.writeln('2) Explain each point briefly and directly.');
     buf.writeln('3) Add one relevant example or use case.');
     if (missing.isNotEmpty) {
-      buf.writeln('4) Revise the answer to cover: ${missing.take(6).join(', ')}.');
+      buf.writeln(
+        '4) Revise the answer to cover: ${missing.take(6).join(', ')}.',
+      );
     }
 
     return buf.toString().trim();

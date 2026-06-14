@@ -37,8 +37,12 @@ class _RevisionViewState extends State<RevisionView> {
     final items = <_RevisionNoteItem>[];
     for (final course in courses) {
       for (var week = 1; week <= 12; week++) {
-        final record = WeeklyNotePersonalStorage.load(courseCode: course, week: week);
-        final hasStudentWork = record.revisionMarked ||
+        final record = WeeklyNotePersonalStorage.load(
+          courseCode: course,
+          week: week,
+        );
+        final hasStudentWork =
+            record.revisionMarked ||
             record.noteText.trim().isNotEmpty ||
             record.highlights.isNotEmpty;
         if (!hasStudentWork) continue;
@@ -101,7 +105,11 @@ class _RevisionViewState extends State<RevisionView> {
       marked: false,
     );
     setState(_loadRevisionItems);
-    Get.snackbar('Updated', 'The note has been removed from revision focus.', snackPosition: SnackPosition.BOTTOM);
+    Get.snackbar(
+      'Updated',
+      'The note has been removed from revision focus.',
+      snackPosition: SnackPosition.BOTTOM,
+    );
   }
 
   Future<void> _openNote(_RevisionNoteItem item) async {
@@ -111,7 +119,11 @@ class _RevisionViewState extends State<RevisionView> {
         week: item.week,
         title: item.title,
         offlineReady: item.week <= 6,
-        statusLabel: item.week < 6 ? 'Available' : item.week == 6 ? 'Current week' : 'Revision access',
+        statusLabel: item.week < 6
+            ? 'Available'
+            : item.week == 6
+            ? 'Current week'
+            : 'Revision access',
       ),
     );
     if (mounted) setState(_loadRevisionItems);
@@ -119,10 +131,16 @@ class _RevisionViewState extends State<RevisionView> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final markedCount = noteItems.where((item) => item.record.revisionMarked).length;
-    final highlightCount = noteItems.fold<int>(0, (sum, item) => sum + item.record.highlights.length);
-    final noteCount = noteItems.where((item) => item.record.noteText.trim().isNotEmpty).length;
+    final markedCount = noteItems
+        .where((item) => item.record.revisionMarked)
+        .length;
+    final highlightCount = noteItems.fold<int>(
+      0,
+      (sum, item) => sum + item.record.highlights.length,
+    );
+    final noteCount = noteItems
+        .where((item) => item.record.noteText.trim().isNotEmpty)
+        .length;
 
     return Scaffold(
       body: LuxuryScaffold(
@@ -157,7 +175,9 @@ class _RevisionViewState extends State<RevisionView> {
                     child: _RevisionNoteCard(
                       item: item,
                       onOpen: () => _openNote(item),
-                      onRemove: item.record.revisionMarked ? () => _removeRevisionFocus(item) : null,
+                      onRemove: item.record.revisionMarked
+                          ? () => _removeRevisionFocus(item)
+                          : null,
                     ),
                   ),
                 ),
@@ -200,33 +220,50 @@ class _RevisionHero extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          IconButton.filledTonal(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton.filledTonal(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Revision Focus',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 22,
+                  ),
+                ),
+              ),
+              const Icon(Icons.school_outlined, color: Colors.white),
+            ],
           ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Text(
-              'Revision Focus',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22),
+          const SizedBox(height: 10),
+          Text(
+            'A professional study space for weekly notes, highlights, and personal academic revision.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.90),
+              fontWeight: FontWeight.w700,
+              height: 1.28,
             ),
           ),
-          const Icon(Icons.school_outlined, color: Colors.white),
-        ]),
-        const SizedBox(height: 10),
-        Text(
-          'A professional study space for weekly notes, highlights, and personal academic revision.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.90), fontWeight: FontWeight.w700, height: 1.28),
-        ),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _HeroPill(label: '$markedCount marked'),
-          _HeroPill(label: '$noteCount personal notes'),
-          _HeroPill(label: '$highlightCount highlights'),
-        ]),
-      ]),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _HeroPill(label: '$markedCount marked'),
+              _HeroPill(label: '$noteCount personal notes'),
+              _HeroPill(label: '$highlightCount highlights'),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -240,22 +277,57 @@ class _RecommendationCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final steps = _steps();
     return _GlassCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          CircleAvatar(backgroundColor: cs.secondary.withValues(alpha: 0.12), child: Icon(Icons.auto_awesome_outlined, color: cs.secondary)),
-          const SizedBox(width: 10),
-          Expanded(child: Text('Recommended study action', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16))),
-        ]),
-        const SizedBox(height: 12),
-        ...steps.map((step) => Padding(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: cs.secondary.withValues(alpha: 0.12),
+                child: Icon(Icons.auto_awesome_outlined, color: cs.secondary),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Recommended study action',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...steps.map(
+            (step) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(Icons.check_circle_outline_rounded, color: cs.secondary, size: 18),
-                const SizedBox(width: 9),
-                Expanded(child: Text(step, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.74), fontWeight: FontWeight.w700, height: 1.30))),
-              ]),
-            )),
-      ]),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: cs.secondary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      step,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.74),
+                        fontWeight: FontWeight.w700,
+                        height: 1.30,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -267,8 +339,12 @@ class _RecommendationCard extends StatelessWidget {
         'Mark selected notes for revision so they appear here.',
       ];
     }
-    final hasShortNotes = items.any((item) => item.record.noteText.trim().length < 80);
-    final lowHighlights = items.any((item) => item.record.highlights.length < 3);
+    final hasShortNotes = items.any(
+      (item) => item.record.noteText.trim().length < 80,
+    );
+    final lowHighlights = items.any(
+      (item) => item.record.highlights.length < 3,
+    );
     if (hasShortNotes) {
       return const [
         'Expand short personal notes into clear summaries in your own words.',
@@ -292,7 +368,11 @@ class _RecommendationCard extends StatelessWidget {
 }
 
 class _RevisionNoteCard extends StatelessWidget {
-  const _RevisionNoteCard({required this.item, required this.onOpen, required this.onRemove});
+  const _RevisionNoteCard({
+    required this.item,
+    required this.onOpen,
+    required this.onRemove,
+  });
 
   final _RevisionNoteItem item;
   final VoidCallback onOpen;
@@ -303,57 +383,108 @@ class _RevisionNoteCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final noteText = item.record.noteText.trim();
     return _GlassCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: cs.primary.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text('W${item.week}', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  'W${item.week}',
+                  style: TextStyle(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${item.courseCode} • ${item.title}',
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      noteText.isEmpty
+                          ? 'No personal note yet. Open this weekly note and add your own summary.'
+                          : noteText,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.68),
+                        fontWeight: FontWeight.w600,
+                        height: 1.30,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('${item.courseCode} • ${item.title}', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 15)),
-            const SizedBox(height: 5),
-            Text(
-              noteText.isEmpty ? 'No personal note yet. Open this weekly note and add your own summary.' : noteText,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.68), fontWeight: FontWeight.w600, height: 1.30),
-            ),
-          ])),
-        ]),
-        const SizedBox(height: 12),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _MiniBadge(text: item.record.revisionMarked ? 'Revision focus' : 'Saved note', active: item.record.revisionMarked),
-          _MiniBadge(text: '${item.record.highlights.length} highlights'),
-          if (item.record.noteText.trim().isNotEmpty) const _MiniBadge(text: 'Personal note'),
-        ]),
-        if (item.record.highlights.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: item.record.highlights.take(5).map((item) => Chip(label: Text(item))).toList(),
+            children: [
+              _MiniBadge(
+                text: item.record.revisionMarked
+                    ? 'Revision focus'
+                    : 'Saved note',
+                active: item.record.revisionMarked,
+              ),
+              _MiniBadge(text: '${item.record.highlights.length} highlights'),
+              if (item.record.noteText.trim().isNotEmpty)
+                const _MiniBadge(text: 'Personal note'),
+            ],
+          ),
+          if (item.record.highlights.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: item.record.highlights
+                  .take(5)
+                  .map((item) => Chip(label: Text(item)))
+                  .toList(),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onOpen,
+                  icon: const Icon(Icons.menu_book_outlined),
+                  label: const Text('Open note'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.bookmark_remove_outlined),
+                  label: const Text('Unmark'),
+                ),
+              ),
+            ],
           ),
         ],
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(child: FilledButton.icon(onPressed: onOpen, icon: const Icon(Icons.menu_book_outlined), label: const Text('Open note'))),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: onRemove,
-              icon: const Icon(Icons.bookmark_remove_outlined),
-              label: const Text('Unmark'),
-            ),
-          ),
-        ]),
-      ]),
+      ),
     );
   }
 }
@@ -366,14 +497,38 @@ class _StudyActionsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return _GlassCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Today\'s academic revision routine', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
-        const SizedBox(height: 12),
-        _RoutineLine(number: 1, text: items.isEmpty ? 'Select one weekly note from My Courses.' : 'Review the first marked weekly note for 10 minutes.'),
-        _RoutineLine(number: 2, text: 'Add or improve at least three highlights.'),
-        _RoutineLine(number: 3, text: 'Write one paragraph summary in your own words.'),
-        _RoutineLine(number: 4, text: 'Attempt related practice questions after revision.'),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Today\'s academic revision routine',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _RoutineLine(
+            number: 1,
+            text: items.isEmpty
+                ? 'Select one weekly note from My Courses.'
+                : 'Review the first marked weekly note for 10 minutes.',
+          ),
+          _RoutineLine(
+            number: 2,
+            text: 'Add or improve at least three highlights.',
+          ),
+          _RoutineLine(
+            number: 3,
+            text: 'Write one paragraph summary in your own words.',
+          ),
+          _RoutineLine(
+            number: 4,
+            text: 'Attempt related practice questions after revision.',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -388,11 +543,30 @@ class _RoutineLine extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        CircleAvatar(radius: 14, backgroundColor: cs.primary.withValues(alpha: 0.12), child: Text('$number', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900))),
-        const SizedBox(width: 10),
-        Expanded(child: Text(text, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.74), fontWeight: FontWeight.w700, height: 1.30))),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: cs.primary.withValues(alpha: 0.12),
+            child: Text(
+              '$number',
+              style: TextStyle(color: cs.primary, fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.74),
+                fontWeight: FontWeight.w700,
+                height: 1.30,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -405,17 +579,30 @@ class _EmptyRevisionState extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return _GlassCard(
-      child: Column(children: [
-        Icon(Icons.auto_stories_outlined, size: 44, color: cs.primary),
-        const SizedBox(height: 10),
-        Text('No revision focus yet', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
-        const SizedBox(height: 8),
-        Text(
-          'Open ${courseCodes.first} from My Courses, read weekly notes, add highlights, and mark important notes for revision.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.70), fontWeight: FontWeight.w600, height: 1.30),
-        ),
-      ]),
+      child: Column(
+        children: [
+          Icon(Icons.auto_stories_outlined, size: 44, color: cs.primary),
+          const SizedBox(height: 10),
+          Text(
+            'No revision focus yet',
+            style: TextStyle(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Open ${courseCodes.first} from My Courses, read weekly notes, add highlights, and mark important notes for revision.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.70),
+              fontWeight: FontWeight.w600,
+              height: 1.30,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -428,11 +615,27 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900, fontSize: 16)),
-      const SizedBox(height: 4),
-      Text(subtitle, style: TextStyle(color: cs.onSurface.withValues(alpha: 0.68), fontWeight: FontWeight.w600)),
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: cs.onSurface,
+            fontWeight: FontWeight.w900,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.68),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -453,7 +656,13 @@ class _GlassCard extends StatelessWidget {
             color: cs.surface,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-            boxShadow: [BoxShadow(blurRadius: 16, offset: const Offset(0, 8), color: cs.shadow.withValues(alpha: 0.035))],
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+                color: cs.shadow.withValues(alpha: 0.035),
+              ),
+            ],
           ),
           child: child,
         ),
@@ -470,8 +679,19 @@ class _HeroPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.17), borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.white.withValues(alpha: 0.22))),
-      child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.17),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }
@@ -487,16 +707,30 @@ class _MiniBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: active ? cs.primary.withValues(alpha: 0.11) : cs.onSurface.withValues(alpha: 0.05),
+        color: active
+            ? cs.primary.withValues(alpha: 0.11)
+            : cs.onSurface.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(text, style: TextStyle(color: active ? cs.primary : cs.onSurface, fontWeight: FontWeight.w800, fontSize: 12)),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: active ? cs.primary : cs.onSurface,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }
 
 class _RevisionNoteItem {
-  const _RevisionNoteItem({required this.courseCode, required this.week, required this.title, required this.record});
+  const _RevisionNoteItem({
+    required this.courseCode,
+    required this.week,
+    required this.title,
+    required this.record,
+  });
   final String courseCode;
   final int week;
   final String title;

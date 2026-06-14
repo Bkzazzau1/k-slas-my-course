@@ -36,4 +36,5 @@ abstract class Routes {
   static const liveSessionRoom = '/live-sessions/room';
   static const liveClassHistory = '/live-sessions/history';
   static const liveSessionReplay = '/live-sessions/replay';
+  static const liveChiefOverview = '/live-sessions/chief-overview';
 }

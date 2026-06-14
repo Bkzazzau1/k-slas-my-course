@@ -34,14 +34,18 @@ class _LiveClassMalpracticeReportOverlayState
   Timer? _timer;
   List<LiveClassMalpracticeReport> _reports = const [];
 
-  int get _openCount => _reports.where((item) => item.isOpen || item.isEscalated).length;
+  int get _openCount =>
+      _reports.where((item) => item.isOpen || item.isEscalated).length;
 
   @override
   void initState() {
     super.initState();
     _controller = Get.find<LiveSessionsController>();
     _reloadReports();
-    _timer = Timer.periodic(const Duration(seconds: 8), (_) => _reloadReports());
+    _timer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => _reloadReports(),
+    );
   }
 
   @override
@@ -58,7 +62,9 @@ class _LiveClassMalpracticeReportOverlayState
 
   void _reloadReports() {
     if (!widget.enabled || widget.sessionId.trim().isEmpty) return;
-    final reports = LiveClassMalpracticeReportService.loadReports(widget.sessionId);
+    final reports = LiveClassMalpracticeReportService.loadReports(
+      widget.sessionId,
+    );
     if (!mounted) return;
     setState(() => _reports = reports);
   }
@@ -148,14 +154,17 @@ class _IncidentSheetContentState extends State<_IncidentSheetContent> {
   Widget build(BuildContext context) {
     return Obx(() {
       final room = widget.controller.room.value;
-      final students = (room?.participants ?? const <LiveSessionParticipant>[])
-          .where((item) => item.role == LiveSessionRole.student)
-          .toList()
-        ..sort((a, b) => a.displayName.compareTo(b.displayName));
+      final students =
+          (room?.participants ?? const <LiveSessionParticipant>[])
+              .where((item) => item.role == LiveSessionRole.student)
+              .toList()
+            ..sort((a, b) => a.displayName.compareTo(b.displayName));
       if (_selectedStudent == null && students.isNotEmpty) {
         _selectedStudent = students.first;
       }
-      final summary = LiveClassMalpracticeReportService.summary(widget.sessionId);
+      final summary = LiveClassMalpracticeReportService.summary(
+        widget.sessionId,
+      );
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -167,18 +176,27 @@ class _IncidentSheetContentState extends State<_IncidentSheetContent> {
               Expanded(
                 child: Text(
                   'Malpractice / suspicious behaviour',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
                 ),
               ),
               SegmentedButton<bool>(
                 segments: const [
-                  ButtonSegment(value: false, icon: Icon(Icons.add_alert_rounded), label: Text('New')),
-                  ButtonSegment(value: true, icon: Icon(Icons.list_alt_rounded), label: Text('Reports')),
+                  ButtonSegment(
+                    value: false,
+                    icon: Icon(Icons.add_alert_rounded),
+                    label: Text('New'),
+                  ),
+                  ButtonSegment(
+                    value: true,
+                    icon: Icon(Icons.list_alt_rounded),
+                    label: Text('Reports'),
+                  ),
                 ],
                 selected: {_showReports},
-                onSelectionChanged: (value) => setState(() => _showReports = value.first),
+                onSelectionChanged: (value) =>
+                    setState(() => _showReports = value.first),
               ),
             ],
           ),
@@ -198,9 +216,12 @@ class _IncidentSheetContentState extends State<_IncidentSheetContent> {
                     category: _category,
                     severity: _severity,
                     descriptionController: _descriptionController,
-                    onStudentChanged: (value) => setState(() => _selectedStudent = value),
-                    onCategoryChanged: (value) => setState(() => _category = value),
-                    onSeverityChanged: (value) => setState(() => _severity = value),
+                    onStudentChanged: (value) =>
+                        setState(() => _selectedStudent = value),
+                    onCategoryChanged: (value) =>
+                        setState(() => _category = value),
+                    onSeverityChanged: (value) =>
+                        setState(() => _severity = value),
                     onSubmit: _submitReport,
                   ),
           ),
@@ -232,9 +253,9 @@ class _IncidentSheetContentState extends State<_IncidentSheetContent> {
     widget.onChanged();
     if (!mounted) return;
     setState(() => _showReports = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Incident report saved.')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Incident report saved.')));
   }
 }
 
@@ -290,11 +311,26 @@ class _IncidentSummary extends StatelessWidget {
       spacing: 8,
       runSpacing: 8,
       children: [
-        _SummaryChip(icon: Icons.list_alt_rounded, label: '${summary.total} total'),
-        _SummaryChip(icon: Icons.report_problem_rounded, label: '${summary.open} open'),
-        _SummaryChip(icon: Icons.priority_high_rounded, label: '${summary.escalated} escalated'),
-        _SummaryChip(icon: Icons.done_all_rounded, label: '${summary.resolved} resolved'),
-        _SummaryChip(icon: Icons.emergency_rounded, label: '${summary.critical} critical'),
+        _SummaryChip(
+          icon: Icons.list_alt_rounded,
+          label: '${summary.total} total',
+        ),
+        _SummaryChip(
+          icon: Icons.report_problem_rounded,
+          label: '${summary.open} open',
+        ),
+        _SummaryChip(
+          icon: Icons.priority_high_rounded,
+          label: '${summary.escalated} escalated',
+        ),
+        _SummaryChip(
+          icon: Icons.done_all_rounded,
+          label: '${summary.resolved} resolved',
+        ),
+        _SummaryChip(
+          icon: Icons.emergency_rounded,
+          label: '${summary.critical} critical',
+        ),
       ],
     );
   }
@@ -343,7 +379,7 @@ class _NewReportForm extends StatelessWidget {
     return ListView(
       children: [
         DropdownButtonFormField<LiveSessionParticipant>(
-          value: selectedStudent,
+          initialValue: selectedStudent,
           items: [
             for (final student in students)
               DropdownMenuItem(
@@ -362,10 +398,13 @@ class _NewReportForm extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: category,
+          initialValue: category,
           items: [
             for (final item in LiveClassIncidentCategory.values)
-              DropdownMenuItem(value: item, child: Text(LiveClassIncidentCategory.label(item))),
+              DropdownMenuItem(
+                value: item,
+                child: Text(LiveClassIncidentCategory.label(item)),
+              ),
           ],
           onChanged: (value) {
             if (value != null) onCategoryChanged(value);
@@ -377,10 +416,13 @@ class _NewReportForm extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         DropdownButtonFormField<String>(
-          value: severity,
+          initialValue: severity,
           items: [
             for (final item in LiveClassIncidentSeverity.values)
-              DropdownMenuItem(value: item, child: Text(LiveClassIncidentSeverity.label(item))),
+              DropdownMenuItem(
+                value: item,
+                child: Text(LiveClassIncidentSeverity.label(item)),
+              ),
           ],
           onChanged: (value) {
             if (value != null) onSeverityChanged(value);
@@ -397,7 +439,8 @@ class _NewReportForm extends StatelessWidget {
           maxLines: 7,
           decoration: const InputDecoration(
             labelText: 'Observation / evidence note',
-            hintText: 'Example: Student repeatedly looked away from camera and appeared to receive help from another person.',
+            hintText:
+                'Example: Student repeatedly looked away from camera and appeared to receive help from another person.',
             border: OutlineInputBorder(),
           ),
         ),
@@ -428,7 +471,9 @@ class _ReportsList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (reports.isEmpty) return const Center(child: Text('No incident report yet.'));
+    if (reports.isEmpty) {
+      return const Center(child: Text('No incident report yet.'));
+    }
     return ListView.separated(
       itemCount: reports.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
@@ -501,27 +546,35 @@ class _ReportTile extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(report.description, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(
+            report.description,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (!report.isEscalated && !report.isResolved && !report.isDismissed)
+              if (!report.isEscalated &&
+                  !report.isResolved &&
+                  !report.isDismissed)
                 OutlinedButton.icon(
-                  onPressed: () => _update(context, LiveClassIncidentStatus.escalated),
+                  onPressed: () =>
+                      _update(context, LiveClassIncidentStatus.escalated),
                   icon: const Icon(Icons.priority_high_rounded),
                   label: const Text('Escalate'),
                 ),
               if (!report.isResolved)
                 FilledButton.tonalIcon(
-                  onPressed: () => _update(context, LiveClassIncidentStatus.resolved),
+                  onPressed: () =>
+                      _update(context, LiveClassIncidentStatus.resolved),
                   icon: const Icon(Icons.done_all_rounded),
                   label: const Text('Resolve'),
                 ),
               if (!report.isDismissed)
                 TextButton.icon(
-                  onPressed: () => _update(context, LiveClassIncidentStatus.dismissed),
+                  onPressed: () =>
+                      _update(context, LiveClassIncidentStatus.dismissed),
                   icon: const Icon(Icons.block_rounded),
                   label: const Text('Dismiss'),
                 ),
@@ -540,9 +593,9 @@ class _ReportTile extends StatelessWidget {
     );
     onChanged();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Report marked as $status.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Report marked as $status.')));
     }
   }
 
