@@ -73,7 +73,7 @@ class DashboardQuickActionsLux extends StatelessWidget {
 
       _ActionTileModel(
         title: "Live sessions",
-        subtitle: "Schedule & attendance",
+        subtitle: "Join & attendance",
         icon: Icons.video_camera_front_outlined,
         tone: _Tone.secondary,
         onTap: () => Get.toNamed(Routes.liveSessions),
