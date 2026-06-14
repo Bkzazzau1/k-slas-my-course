@@ -8,6 +8,8 @@ abstract class Routes {
   static const courseDetail = '/courses/detail';
   static const academicRecord = '/courses/academic-record';
   static const courseRegistration = '/courses/registration';
+  static const internshipManagement = '/student/internship';
+  static const transcriptServices = '/student/transcripts';
   static const chat = '/chat';
   static const practiceSetup = '/practice/setup';
   static const practiceSession = '/practice/session';
