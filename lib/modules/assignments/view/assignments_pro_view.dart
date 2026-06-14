@@ -34,11 +34,12 @@ class AssignmentsProView extends GetView<AssignmentsController> {
             Expanded(
               child: Obx(() {
                 final assignments = controller.visibleAssignments;
-                final courses = controller.assignments
-                    .map((item) => item.courseCode)
-                    .toSet()
-                    .toList()
-                  ..sort();
+                final courses =
+                    controller.assignments
+                        .map((item) => item.courseCode)
+                        .toSet()
+                        .toList()
+                      ..sort();
 
                 if (controller.isLoading.value && assignments.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
@@ -60,7 +61,8 @@ class AssignmentsProView extends GetView<AssignmentsController> {
                       _CourseFilterBar(
                         courses: courses,
                         selected: controller.filterCourseCode.value,
-                        onChanged: (value) => controller.filterCourseCode.value = value,
+                        onChanged: (value) =>
+                            controller.filterCourseCode.value = value,
                       ),
                       const SizedBox(height: 12),
                       if (assignments.isEmpty)
@@ -70,7 +72,10 @@ class AssignmentsProView extends GetView<AssignmentsController> {
                           (assignment) => _AssignmentProCard(
                             assignment: assignment,
                             controller: controller,
-                            onSubmit: () => _openSubmitSheet(context, assignment),
+                            onView: () =>
+                                _openAssignmentDetails(context, assignment),
+                            onSubmit: () =>
+                                _openSubmitSheet(context, assignment),
                             onReceipt: () => _openReceipt(context, assignment),
                           ),
                         ),
@@ -88,6 +93,17 @@ class AssignmentsProView extends GetView<AssignmentsController> {
   void _openSubmitSheet(BuildContext context, AssignmentModel assignment) {
     Get.bottomSheet<void>(
       _AssignmentProSubmitSheet(assignment: assignment, controller: controller),
+      isScrollControlled: true,
+      ignoreSafeArea: false,
+    );
+  }
+
+  void _openAssignmentDetails(
+    BuildContext context,
+    AssignmentModel assignment,
+  ) {
+    Get.bottomSheet<void>(
+      _AssignmentDetailsSheet(assignment: assignment),
       isScrollControlled: true,
       ignoreSafeArea: false,
     );
@@ -196,12 +212,20 @@ class _StudentAssignmentDashboard extends StatelessWidget {
           submission: controller.submissionFor(assignment.id),
         ),
     ];
-    final dueSoon = status.where((item) => item.isDueSoon && !item.isSubmitted).length;
-    final overdue = status.where((item) => item.isOverdue && !item.isSubmitted).length;
+    final dueSoon = status
+        .where((item) => item.isDueSoon && !item.isSubmitted)
+        .length;
+    final overdue = status
+        .where((item) => item.isOverdue && !item.isSubmitted)
+        .length;
     final submitted = status.where((item) => item.isSubmitted).length;
     return _MetricWrap(
       items: [
-        _MetricData('Assignments', assignments.length.toString(), Icons.assignment_rounded),
+        _MetricData(
+          'Assignments',
+          assignments.length.toString(),
+          Icons.assignment_rounded,
+        ),
         _MetricData('Submitted', submitted.toString(), Icons.verified_rounded),
         _MetricData('Due soon', dueSoon.toString(), Icons.schedule_rounded),
         _MetricData('Overdue', overdue.toString(), Icons.warning_amber_rounded),
@@ -253,12 +277,18 @@ class _MetricTile extends StatelessWidget {
         children: [
           Icon(item.icon, color: cs.primary),
           const SizedBox(height: 8),
-          Text(item.value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+          Text(
+            item.value,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+          ),
           Text(
             item.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ],
       ),
@@ -291,11 +321,17 @@ class _PortalNoticeCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
                 const SizedBox(height: 3),
                 Text(
                   message,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -339,8 +375,14 @@ class _CourseFilterBar extends StatelessWidget {
                 value: selected,
                 isExpanded: true,
                 items: [
-                  const DropdownMenuItem(value: null, child: Text('All courses')),
-                  ...courses.map((course) => DropdownMenuItem(value: course, child: Text(course))),
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All courses'),
+                  ),
+                  ...courses.map(
+                    (course) =>
+                        DropdownMenuItem(value: course, child: Text(course)),
+                  ),
                 ],
                 onChanged: onChanged,
               ),
@@ -356,12 +398,14 @@ class _AssignmentProCard extends StatelessWidget {
   const _AssignmentProCard({
     required this.assignment,
     required this.controller,
+    required this.onView,
     required this.onSubmit,
     required this.onReceipt,
   });
 
   final AssignmentModel assignment;
   final AssignmentsController controller;
+  final VoidCallback onView;
   final VoidCallback onSubmit;
   final VoidCallback onReceipt;
 
@@ -377,10 +421,10 @@ class _AssignmentProCard extends StatelessWidget {
     final tone = status.isSubmitted
         ? cs.primary
         : status.isOverdue
-            ? Colors.redAccent
-            : status.isDueSoon
-                ? Colors.orangeAccent
-                : cs.secondary;
+        ? Colors.redAccent
+        : status.isDueSoon
+        ? Colors.orangeAccent
+        : cs.secondary;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -414,14 +458,20 @@ class _AssignmentProCard extends StatelessWidget {
                       '${assignment.courseCode} • ${assignment.title}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       assignment.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -444,12 +494,22 @@ class _AssignmentProCard extends StatelessWidget {
             runSpacing: 8,
             children: [
               _MiniPill(text: status.detail, tone: tone),
-              _MiniPill(text: assignment.allowTextSubmission ? 'Text allowed' : 'No text', tone: cs.primary),
+              _MiniPill(
+                text: assignment.allowTextSubmission
+                    ? 'Text allowed'
+                    : 'No text',
+                tone: cs.primary,
+              ),
               if (assignment.allowFileSubmission)
-                _MiniPill(text: assignment.allowedExtensions.join(', '), tone: cs.secondary),
+                _MiniPill(
+                  text: assignment.allowedExtensions.join(', '),
+                  tone: cs.secondary,
+                ),
               if (assignment.whiteboardEnabled)
                 _MiniPill(
-                  text: assignment.whiteboardRequired ? 'Whiteboard required' : 'Whiteboard optional',
+                  text: assignment.whiteboardRequired
+                      ? 'Whiteboard required'
+                      : 'Whiteboard optional',
                   tone: cs.tertiary,
                 ),
               if (draft != null && submission == null)
@@ -460,9 +520,21 @@ class _AssignmentProCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onView,
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('View'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: FilledButton.icon(
                   onPressed: status.canSubmit ? onSubmit : null,
-                  icon: Icon(submission == null ? Icons.cloud_upload_outlined : Icons.edit_note_rounded),
+                  icon: Icon(
+                    submission == null
+                        ? Icons.cloud_upload_outlined
+                        : Icons.edit_note_rounded,
+                  ),
                   label: Text(submission == null ? 'Submit' : 'Resubmit'),
                 ),
               ),
@@ -482,6 +554,248 @@ class _AssignmentProCard extends StatelessWidget {
   }
 }
 
+class _AssignmentDetailsSheet extends StatelessWidget {
+  const _AssignmentDetailsSheet({required this.assignment});
+
+  final AssignmentModel assignment;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.42,
+      maxChildSize: 0.94,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+            children: [
+              Center(
+                child: Container(
+                  width: 48,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: cs.primaryContainer,
+                    child: Icon(Icons.assignment_outlined, color: cs.primary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${assignment.courseCode} • ${assignment.title}',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Posted by ${assignment.lecturerName}',
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MiniPill(
+                    text:
+                        'Posted ${_formatAssignmentDateTime(assignment.assignedAt)}',
+                    tone: cs.secondary,
+                  ),
+                  _MiniPill(
+                    text:
+                        'Due ${_formatAssignmentDateTime(assignment.deadline)}',
+                    tone: cs.primary,
+                  ),
+                  _MiniPill(
+                    text: assignment.isGroupAssignment
+                        ? 'Group assignment'
+                        : 'Individual assignment',
+                    tone: cs.tertiary,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _DetailBlock(
+                title: 'Assignment instructions',
+                icon: Icons.notes_outlined,
+                child: Text(
+                  assignment.description,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _DetailBlock(
+                title: 'Submission settings',
+                icon: Icons.upload_file_outlined,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _MiniPill(
+                      text: assignment.allowTextSubmission
+                          ? 'Text answer allowed'
+                          : 'Text answer disabled',
+                      tone: cs.primary,
+                    ),
+                    _MiniPill(
+                      text: assignment.allowFileSubmission
+                          ? 'File upload allowed'
+                          : 'File upload disabled',
+                      tone: cs.secondary,
+                    ),
+                    if (assignment.allowFileSubmission)
+                      _MiniPill(
+                        text: assignment.allowedExtensions.join(', '),
+                        tone: cs.tertiary,
+                      ),
+                    if (assignment.whiteboardEnabled)
+                      _MiniPill(
+                        text: assignment.whiteboardRequired
+                            ? 'Whiteboard required'
+                            : 'Whiteboard optional',
+                        tone: Colors.indigo,
+                      ),
+                  ],
+                ),
+              ),
+              if ((assignment.whiteboardPrompt ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _DetailBlock(
+                  title: 'Whiteboard prompt',
+                  icon: Icons.draw_outlined,
+                  child: Text(
+                    assignment.whiteboardPrompt!,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+              if (assignment.isGroupAssignment) ...[
+                const SizedBox(height: 12),
+                _DetailBlock(
+                  title: assignment.groupName ?? 'Assignment group',
+                  icon: Icons.groups_outlined,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final member in assignment.groupMembers)
+                        _MiniPill(text: member.name, tone: cs.secondary),
+                    ],
+                  ),
+                ),
+              ],
+              if (assignment.peerReview != null) ...[
+                const SizedBox(height: 12),
+                _DetailBlock(
+                  title: 'Peer review after submission',
+                  icon: Icons.rate_review_outlined,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Assigned peer: ${assignment.peerReview!.target.name}',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 8),
+                      for (final item in assignment.peerReview!.rubric)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.check_circle_outline,
+                                size: 18,
+                                color: cs.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(item)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DetailBlock extends StatelessWidget {
+  const _DetailBlock({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
 class _AssignmentProSubmitSheet extends StatefulWidget {
   const _AssignmentProSubmitSheet({
     required this.assignment,
@@ -492,7 +806,8 @@ class _AssignmentProSubmitSheet extends StatefulWidget {
   final AssignmentsController controller;
 
   @override
-  State<_AssignmentProSubmitSheet> createState() => _AssignmentProSubmitSheetState();
+  State<_AssignmentProSubmitSheet> createState() =>
+      _AssignmentProSubmitSheetState();
 }
 
 class _AssignmentProSubmitSheetState extends State<_AssignmentProSubmitSheet> {
@@ -506,11 +821,14 @@ class _AssignmentProSubmitSheetState extends State<_AssignmentProSubmitSheet> {
   @override
   void initState() {
     super.initState();
-    final existing = widget.controller.submissionFor(widget.assignment.id) ??
+    final existing =
+        widget.controller.submissionFor(widget.assignment.id) ??
         AssignmentSubmissionStorage.loadDraft(widget.assignment.id);
     _textController = TextEditingController(text: existing?.textAnswer ?? '');
     _files.addAll(existing?.files ?? const []);
-    _whiteboardStrokes = List<WhiteboardStroke>.from(existing?.whiteboardStrokes ?? const []);
+    _whiteboardStrokes = List<WhiteboardStroke>.from(
+      existing?.whiteboardStrokes ?? const [],
+    );
     _textController.addListener(_scheduleAutosave);
   }
 
@@ -522,7 +840,8 @@ class _AssignmentProSubmitSheetState extends State<_AssignmentProSubmitSheet> {
     super.dispose();
   }
 
-  AssignmentSubmissionChecklist get _checklist => AssignmentQualityService.checklistFor(
+  AssignmentSubmissionChecklist get _checklist =>
+      AssignmentQualityService.checklistFor(
         assignment: widget.assignment,
         textAnswer: _textController.text,
         files: _files,
@@ -546,7 +865,9 @@ class _AssignmentProSubmitSheetState extends State<_AssignmentProSubmitSheet> {
       textAnswer: text.isEmpty ? null : text,
       files: List<AssignmentUploadFile>.from(_files),
       whiteboardStrokes: List<WhiteboardStroke>.from(_whiteboardStrokes),
-      groupId: widget.assignment.isGroupAssignment ? widget.assignment.groupId : null,
+      groupId: widget.assignment.isGroupAssignment
+          ? widget.assignment.groupId
+          : null,
       submittedById: widget.controller.currentActorId.value,
       submittedByName: widget.controller.currentActorName.value,
     );
@@ -590,9 +911,9 @@ class _AssignmentProSubmitSheetState extends State<_AssignmentProSubmitSheet> {
   Future<void> _submit() async {
     final checklist = _checklist;
     if (!checklist.ready) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(checklist.blockers.first)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(checklist.blockers.first)));
       return;
     }
     setState(() => _submitting = true);
@@ -651,12 +972,18 @@ class _AssignmentProSubmitSheetState extends State<_AssignmentProSubmitSheet> {
               const SizedBox(height: 14),
               Text(
                 'Submit • ${widget.assignment.courseCode}',
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
                 widget.assignment.title,
-                style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const SizedBox(height: 12),
               _ChecklistPanel(checklist: checklist),
@@ -697,7 +1024,11 @@ class _AssignmentProSubmitSheetState extends State<_AssignmentProSubmitSheet> {
               if (_lastDraftSavedAt != null)
                 Text(
                   'Draft autosaved ${_fmtTime(_lastDraftSavedAt!)}',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700, fontSize: 12),
+                  style: TextStyle(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
                 ),
               const SizedBox(height: 14),
               Row(
@@ -714,7 +1045,11 @@ class _AssignmentProSubmitSheetState extends State<_AssignmentProSubmitSheet> {
                     child: FilledButton.icon(
                       onPressed: _submitting ? null : _submit,
                       icon: _submitting
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Icon(Icons.cloud_upload_outlined),
                       label: Text(_submitting ? 'Submitting...' : 'Submit now'),
                     ),
@@ -746,10 +1081,13 @@ class _ChecklistPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: (checklist.ready ? cs.primary : Colors.orangeAccent).withValues(alpha: 0.08),
+        color: (checklist.ready ? cs.primary : Colors.orangeAccent).withValues(
+          alpha: 0.08,
+        ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: (checklist.ready ? cs.primary : Colors.orangeAccent).withValues(alpha: 0.22),
+          color: (checklist.ready ? cs.primary : Colors.orangeAccent)
+              .withValues(alpha: 0.22),
         ),
       ),
       child: Column(
@@ -757,7 +1095,10 @@ class _ChecklistPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(checklist.ready ? Icons.verified_rounded : Icons.rule_rounded, color: checklist.ready ? cs.primary : Colors.orangeAccent),
+              Icon(
+                checklist.ready ? Icons.verified_rounded : Icons.rule_rounded,
+                color: checklist.ready ? cs.primary : Colors.orangeAccent,
+              ),
               const SizedBox(width: 8),
               Text(
                 checklist.ready ? 'Ready to submit' : 'Submission checklist',
@@ -766,9 +1107,27 @@ class _ChecklistPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          ...checklist.blockers.map((item) => _ChecklistLine(icon: Icons.error_outline_rounded, text: item, tone: Colors.redAccent)),
-          ...checklist.warnings.map((item) => _ChecklistLine(icon: Icons.info_outline_rounded, text: item, tone: Colors.orangeAccent)),
-          ...checklist.items.map((item) => _ChecklistLine(icon: Icons.check_circle_outline_rounded, text: item, tone: cs.primary)),
+          ...checklist.blockers.map(
+            (item) => _ChecklistLine(
+              icon: Icons.error_outline_rounded,
+              text: item,
+              tone: Colors.redAccent,
+            ),
+          ),
+          ...checklist.warnings.map(
+            (item) => _ChecklistLine(
+              icon: Icons.info_outline_rounded,
+              text: item,
+              tone: Colors.orangeAccent,
+            ),
+          ),
+          ...checklist.items.map(
+            (item) => _ChecklistLine(
+              icon: Icons.check_circle_outline_rounded,
+              text: item,
+              tone: cs.primary,
+            ),
+          ),
         ],
       ),
     );
@@ -776,7 +1135,11 @@ class _ChecklistPanel extends StatelessWidget {
 }
 
 class _ChecklistLine extends StatelessWidget {
-  const _ChecklistLine({required this.icon, required this.text, required this.tone});
+  const _ChecklistLine({
+    required this.icon,
+    required this.text,
+    required this.tone,
+  });
 
   final IconData icon;
   final String text;
@@ -791,7 +1154,12 @@ class _ChecklistLine extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: tone),
           const SizedBox(width: 7),
-          Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w700))),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
       ),
     );
@@ -824,11 +1192,16 @@ class _WhiteboardPanel extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              strokeCount == 0 ? 'No whiteboard diagram added' : '$strokeCount whiteboard stroke(s) added',
+              strokeCount == 0
+                  ? 'No whiteboard diagram added'
+                  : '$strokeCount whiteboard stroke(s) added',
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ),
-          OutlinedButton(onPressed: onOpen, child: Text(strokeCount == 0 ? 'Open' : 'Edit')),
+          OutlinedButton(
+            onPressed: onOpen,
+            child: Text(strokeCount == 0 ? 'Open' : 'Edit'),
+          ),
         ],
       ),
     );
@@ -920,7 +1293,10 @@ class _AssignmentReceiptSheet extends StatelessWidget {
                 Icon(Icons.verified_rounded, color: cs.primary),
                 const SizedBox(width: 8),
                 const Expanded(
-                  child: Text('Assignment submission receipt', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+                  child: Text(
+                    'Assignment submission receipt',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
                 ),
               ],
             ),
@@ -929,8 +1305,12 @@ class _AssignmentReceiptSheet extends StatelessWidget {
             _ReceiptLine(label: 'Course', value: receipt.courseCode),
             _ReceiptLine(label: 'Submitted by', value: receipt.submittedBy),
             _ReceiptLine(label: 'Mode', value: receipt.submissionModeLabel),
-            _ReceiptLine(label: 'Submitted at', value: _fmtDateTime(receipt.submittedAt)),
-            if (receipt.groupId != null) _ReceiptLine(label: 'Group ID', value: receipt.groupId!),
+            _ReceiptLine(
+              label: 'Submitted at',
+              value: _fmtDateTime(receipt.submittedAt),
+            ),
+            if (receipt.groupId != null)
+              _ReceiptLine(label: 'Group ID', value: receipt.groupId!),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -970,7 +1350,15 @@ class _ReceiptLine extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700))),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -983,6 +1371,15 @@ class _ReceiptLine extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatAssignmentDateTime(DateTime date) {
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final year = date.year.toString();
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '$day/$month/$year $hour:$minute';
 }
 
 class _MiniPill extends StatelessWidget {
@@ -999,7 +1396,14 @@ class _MiniPill extends StatelessWidget {
         color: tone.withValues(alpha: 0.11),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(text, style: TextStyle(color: tone, fontWeight: FontWeight.w900, fontSize: 12)),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: tone,
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 }
@@ -1012,7 +1416,10 @@ class _EmptyAssignmentsProState extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(22)),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(22),
+      ),
       child: const Column(
         children: [
           Icon(Icons.assignment_outlined, size: 46),

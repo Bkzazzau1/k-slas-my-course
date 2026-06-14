@@ -56,6 +56,7 @@ import '../../modules/timetable/binding/timetable_binding.dart';
 import '../../modules/timetable/controller/timetable_controller.dart';
 import '../../modules/timetable/view/timetable_view.dart';
 import '../../modules/weak_areas/binding/weak_areas_binding.dart';
+import '../../modules/weak_areas/controller/weak_areas_controller.dart';
 import '../../modules/weak_areas/view/weak_areas_view.dart';
 import '../main_nav/main_nav_view.dart';
 import 'app_routes.dart';
@@ -245,6 +246,7 @@ class AppPages {
       Get.put(RevisionPlanController(), permanent: true);
       Get.put(TimetableController(), permanent: true);
       Get.put(SettingsController(), permanent: true);
+      Get.put(WeakAreasController(), permanent: true);
       Get.put(DashboardController(), permanent: true);
       CoursesBinding().dependencies();
     });

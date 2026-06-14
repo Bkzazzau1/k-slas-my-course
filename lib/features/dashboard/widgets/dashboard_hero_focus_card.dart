@@ -20,9 +20,7 @@ class DashboardHeroFocusCard extends GetView<DashboardController> {
     final settings = Get.find<SettingsController>();
     final tt = Get.find<TimetableController>();
 
-    final weak = Get.isRegistered<WeakAreasController>()
-        ? Get.find<WeakAreasController>()
-        : Get.put(WeakAreasController());
+    final weak = Get.find<WeakAreasController>();
 
     return Obx(() {
       final plan = rev.plan.value;

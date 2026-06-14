@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../../data/models/weak_area_models.dart';
 import '../../../data/services/student_profile_storage.dart';
@@ -26,7 +27,9 @@ class WeakAreasController extends GetxController {
 
   @override
   void onInit() {
-    load();
     super.onInit();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      load();
+    });
   }
 }
