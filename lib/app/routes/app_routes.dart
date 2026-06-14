@@ -10,6 +10,7 @@ abstract class Routes {
   static const courseRegistration = '/courses/registration';
   static const internshipManagement = '/student/internship';
   static const transcriptServices = '/student/transcripts';
+  static const studentSupport = '/student/support';
   static const chat = '/chat';
   static const practiceSetup = '/practice/setup';
   static const practiceSession = '/practice/session';
