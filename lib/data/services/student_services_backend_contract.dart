@@ -27,13 +27,22 @@ class StudentSupportBackendPath {
   static const ticketUpdates = '/api/v1/student/support/tickets/{ticketId}/updates';
 }
 
+class StudentGraduationBackendPath {
+  static const graduationMap = '/api/v1/student/graduation-map';
+  static const creditSummary = '/api/v1/student/graduation-map/credit-summary';
+  static const remainingCourses = '/api/v1/student/graduation-map/remaining-courses';
+  static const levelProgress = '/api/v1/student/graduation-map/level-progress';
+  static const graduationAlerts = '/api/v1/student/graduation-map/alerts';
+}
+
 class StudentServicesWorkflowContract {
   const StudentServicesWorkflowContract._();
 
   static const ownershipRules = [
-    'Internship, transcript request and support screens in k-slas-my-course are student-facing only.',
+    'Internship, transcript request, support and graduation mapping screens in k-slas-my-course are student-facing only.',
     'Students may submit internship profile updates, placement letter requests, acceptance letters, logbook entries, transcript requests and support tickets.',
     'Students may view only their own support tickets and may reply or upload evidence to their own tickets.',
+    'Graduation mapping must show only the authenticated student academic progress, credits, completed courses, remaining courses, carryovers and pending-result alerts.',
     'Support ticket assignment, escalation, staff investigation, resolution and SLA audit belong to kslas-admin-ui.',
     'Official transcript approval, records review, dispatch and institutional verification belong to the admin/staff backend workflow, not the student app.',
     'Unofficial transcript preview and print must be clearly marked as student copy and not official.',
