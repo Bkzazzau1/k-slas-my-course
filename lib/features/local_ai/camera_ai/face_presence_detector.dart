@@ -8,12 +8,14 @@ class FacePresenceObservation {
     required this.faceCount,
     this.primaryFaceConfidence,
     this.faceMissingDurationSeconds = 0,
+    this.metadata = const <String, Object?>{},
   });
 
   final DateTime timestamp;
   final int faceCount;
   final double? primaryFaceConfidence;
   final int faceMissingDurationSeconds;
+  final Map<String, Object?> metadata;
 
   bool get hasFace => faceCount > 0;
   bool get hasMultipleFaces => faceCount > 1;
@@ -56,6 +58,7 @@ class FacePresenceDetector
           metadata: <String, Object?>{
             'faceCount': input.faceCount,
             'faceMissingDurationSeconds': input.faceMissingDurationSeconds,
+            ...input.metadata,
           },
         ),
       ];
@@ -72,6 +75,7 @@ class FacePresenceDetector
           message: 'Multiple faces detected in camera feed.',
           metadata: <String, Object?>{
             'faceCount': input.faceCount,
+            ...input.metadata,
           },
         ),
       ];
@@ -87,6 +91,7 @@ class FacePresenceDetector
         message: 'Face visible.',
         metadata: <String, Object?>{
           'faceCount': input.faceCount,
+          ...input.metadata,
         },
       ),
     ];
