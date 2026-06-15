@@ -5,9 +5,13 @@ import '../controller/proctoring_controller.dart';
 import 'local_ai_proctoring_adapter.dart';
 
 class LocalAiCameraBinding {
-  LocalAiCameraBinding({required this.proctoringController});
+  LocalAiCameraBinding({
+    required this.proctoringController,
+    this.faceSource,
+  });
 
   final ProctoringController proctoringController;
+  final CameraFaceSource? faceSource;
 
   LocalAiEngine? _engine;
   LocalAiCameraMonitor? _monitor;
@@ -27,6 +31,7 @@ class LocalAiCameraBinding {
     final monitor = LocalAiCameraMonitor(
       cameraController: controller,
       localAiEngine: engine,
+      faceSource: faceSource,
     );
 
     _engine = engine;
