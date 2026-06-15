@@ -8,5 +8,6 @@ export 'services/face_enrollment_service.dart';
 export 'services/face_similarity_service.dart';
 export 'services/face_verification_service.dart';
 export 'services/identity_trust_repository.dart';
+export 'services/in_memory_identity_trust_repository.dart';
 export 'services/live_face_embedding_source.dart';
 export 'services/trusted_device_service.dart';
