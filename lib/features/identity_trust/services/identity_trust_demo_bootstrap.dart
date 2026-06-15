@@ -1,14 +1,16 @@
 import 'package:get/get.dart';
 
 import 'face_embedding_connector.dart';
+import 'face_embedding_connector_selector.dart';
 import 'identity_trust_repository.dart';
 import 'identity_trust_repository_selector.dart';
-import 'static_face_embedding_connector.dart';
 
 class IdentityTrustDemoBootstrap {
   IdentityTrustDemoBootstrap._();
 
-  static void register() {
+  static void register({
+    FaceEmbeddingRuntimeTarget connectorTarget = FaceEmbeddingRuntimeTarget.demo,
+  }) {
     if (!Get.isRegistered<IdentityTrustRepository>()) {
       Get.put<IdentityTrustRepository>(
         const IdentityTrustRepositorySelector().select(),
@@ -18,10 +20,7 @@ class IdentityTrustDemoBootstrap {
 
     if (!Get.isRegistered<FaceEmbeddingConnector>()) {
       Get.put<FaceEmbeddingConnector>(
-        StaticFaceEmbeddingConnector(
-          embedding: const <double>[1, 0, 0],
-          version: 'demo-static-face-v1',
-        ),
+        FaceEmbeddingConnectorSelector(target: connectorTarget).select(),
         permanent: true,
       );
     }
