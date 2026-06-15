@@ -1,8 +1,8 @@
 import 'package:camera/camera.dart';
 
 import '../../../data/services/student_profile_storage.dart';
-import '../../../features/identity_trust/camera_identity_trust.dart';
 import '../../../features/identity_trust/identity_trust.dart';
+import '../../../features/identity_trust/services/preprocessed_camera_face_embedding_input_provider.dart';
 
 class ExamStartIdentityRequest {
   const ExamStartIdentityRequest({
