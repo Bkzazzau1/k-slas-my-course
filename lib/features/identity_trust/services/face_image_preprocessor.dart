@@ -1,4 +1,5 @@
 import 'face_embedding_connector.dart';
+import 'rgb_face_resizer.dart';
 
 class FaceImagePreprocessConfig {
   const FaceImagePreprocessConfig({
@@ -37,20 +38,36 @@ abstract class FaceImagePreprocessor {
 class PassThroughFaceImagePreprocessor implements FaceImagePreprocessor {
   const PassThroughFaceImagePreprocessor({
     this.config = const FaceImagePreprocessConfig(),
+    this.resizer = const RgbFaceResizer(),
   });
 
   final FaceImagePreprocessConfig config;
+  final RgbFaceResizer resizer;
 
   @override
   Future<FaceEmbeddingInput> preprocess(FaceImagePreprocessRequest request) async {
+    final isRgb = request.format.toLowerCase() == 'rgb';
+    final canResize = isRgb && request.sourceWidth > 0 && request.sourceHeight > 0;
+    final outputValues = canResize
+        ? resizer.resizeCenterSquare(
+            RgbFaceResizeRequest(
+              values: request.values,
+              sourceWidth: request.sourceWidth,
+              sourceHeight: request.sourceHeight,
+              targetWidth: config.targetWidth,
+              targetHeight: config.targetHeight,
+            ),
+          )
+        : request.values;
+
     return FaceEmbeddingInput(
-      values: request.values,
-      width: request.sourceWidth,
-      height: request.sourceHeight,
+      values: outputValues,
+      width: canResize ? config.targetWidth : request.sourceWidth,
+      height: canResize ? config.targetHeight : request.sourceHeight,
       format: request.format,
       metadata: <String, Object?>{
         ...request.metadata,
-        'preprocessed': false,
+        'preprocessed': canResize,
         'targetWidth': config.targetWidth,
         'targetHeight': config.targetHeight,
         'normalizationMean': config.normalizationMean,
