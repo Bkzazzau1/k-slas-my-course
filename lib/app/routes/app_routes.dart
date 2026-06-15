@@ -12,6 +12,7 @@ abstract class Routes {
   static const transcriptServices = '/student/transcripts';
   static const studentSupport = '/student/support';
   static const graduationMapping = '/student/graduation-map';
+  static const faceEnrollment = '/identity/face-enrollment';
   static const chat = '/chat';
   static const practiceSetup = '/practice/setup';
   static const practiceSession = '/practice/session';
