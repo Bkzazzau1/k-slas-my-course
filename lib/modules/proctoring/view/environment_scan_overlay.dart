@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../controller/proctoring_controller.dart';
+import '../services/environment_identity_trust_gate.dart';
 
 class EnvironmentScanOverlay extends StatefulWidget {
   const EnvironmentScanOverlay({super.key});
@@ -90,6 +91,26 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   Future<void> _startExam() async {
     if (!scanPassed || startingExam) return;
     setState(() => startingExam = true);
+
+    final c = camera;
+    if (c == null || !c.value.isInitialized) {
+      setState(() => startingExam = false);
+      return;
+    }
+
+    final identityResult = await const EnvironmentIdentityTrustGate().verify(
+      proctoring: proctoring,
+      cameraController: c,
+    );
+    if (!identityResult.allowed) {
+      if (!mounted) return;
+      setState(() {
+        startingExam = false;
+        statusText = identityResult.message;
+      });
+      return;
+    }
+
     await proctoring.completeEnvironmentScan();
     await Future<void>.delayed(const Duration(milliseconds: 160));
     if (!mounted) return;
