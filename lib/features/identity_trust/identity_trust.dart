@@ -2,6 +2,7 @@ export 'models/face_verification_log.dart';
 export 'models/face_verification_result.dart';
 export 'models/student_face_profile.dart';
 export 'models/student_trusted_device.dart';
+export 'services/camera_face_embedding_input_provider.dart';
 export 'services/device_fingerprint_service.dart';
 export 'services/exam_start_trust_service.dart';
 export 'services/face_embedding_connector.dart';
