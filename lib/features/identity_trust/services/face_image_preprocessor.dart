@@ -1,4 +1,6 @@
 import 'face_embedding_connector.dart';
+import 'face_image_decoder.dart';
+import 'jpeg_face_image_decoder.dart';
 import 'rgb_face_resizer.dart';
 
 class FaceImagePreprocessConfig {
@@ -39,40 +41,62 @@ class PassThroughFaceImagePreprocessor implements FaceImagePreprocessor {
   const PassThroughFaceImagePreprocessor({
     this.config = const FaceImagePreprocessConfig(),
     this.resizer = const RgbFaceResizer(),
+    this.decoder = const JpegFaceImageDecoder(),
   });
 
   final FaceImagePreprocessConfig config;
   final RgbFaceResizer resizer;
+  final FaceImageDecoder decoder;
 
   @override
   Future<FaceEmbeddingInput> preprocess(FaceImagePreprocessRequest request) async {
-    final isRgb = request.format.toLowerCase() == 'rgb';
-    final canResize = isRgb && request.sourceWidth > 0 && request.sourceHeight > 0;
+    final preparedRequest = await _decodeIfNeeded(request);
+    final isRgb = preparedRequest.format.toLowerCase() == 'rgb';
+    final canResize = isRgb &&
+        preparedRequest.sourceWidth > 0 &&
+        preparedRequest.sourceHeight > 0;
+
     final outputValues = canResize
         ? resizer.resizeCenterSquare(
             RgbFaceResizeRequest(
-              values: request.values,
-              sourceWidth: request.sourceWidth,
-              sourceHeight: request.sourceHeight,
+              values: preparedRequest.values,
+              sourceWidth: preparedRequest.sourceWidth,
+              sourceHeight: preparedRequest.sourceHeight,
               targetWidth: config.targetWidth,
               targetHeight: config.targetHeight,
             ),
           )
-        : request.values;
+        : preparedRequest.values;
 
     return FaceEmbeddingInput(
       values: outputValues,
-      width: canResize ? config.targetWidth : request.sourceWidth,
-      height: canResize ? config.targetHeight : request.sourceHeight,
-      format: request.format,
+      width: canResize ? config.targetWidth : preparedRequest.sourceWidth,
+      height: canResize ? config.targetHeight : preparedRequest.sourceHeight,
+      format: canResize ? 'rgb' : preparedRequest.format,
       metadata: <String, Object?>{
-        ...request.metadata,
+        ...preparedRequest.metadata,
         'preprocessed': canResize,
         'targetWidth': config.targetWidth,
         'targetHeight': config.targetHeight,
         'normalizationMean': config.normalizationMean,
         'normalizationStd': config.normalizationStd,
       },
+    );
+  }
+
+  Future<FaceImagePreprocessRequest> _decodeIfNeeded(
+    FaceImagePreprocessRequest request,
+  ) async {
+    if (request.format.toLowerCase() == 'rgb') return request;
+    if (!decoder.canDecode(request.format)) return request;
+
+    final decoded = await decoder.decode(request);
+    return FaceImagePreprocessRequest(
+      values: decoded.values,
+      sourceWidth: decoded.width,
+      sourceHeight: decoded.height,
+      format: decoded.format,
+      metadata: decoded.metadata,
     );
   }
 }
