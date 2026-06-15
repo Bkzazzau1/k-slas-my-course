@@ -13,6 +13,8 @@ export 'services/identity_trust_repository.dart';
 export 'services/in_memory_identity_trust_repository.dart';
 export 'services/live_face_embedding_source.dart';
 export 'services/model_live_face_embedding_source.dart';
+export 'services/onnx_face_embedding_connector.dart';
 export 'services/static_face_embedding_connector.dart';
 export 'services/static_face_embedding_input_provider.dart';
+export 'services/tflite_face_embedding_connector.dart';
 export 'services/trusted_device_service.dart';
