@@ -7,6 +7,7 @@ export 'services/device_fingerprint_service.dart';
 export 'services/exam_start_trust_service.dart';
 export 'services/face_embedding_connector.dart';
 export 'services/face_enrollment_service.dart';
+export 'services/face_image_preprocessor.dart';
 export 'services/face_similarity_service.dart';
 export 'services/face_verification_service.dart';
 export 'services/identity_trust_repository.dart';
