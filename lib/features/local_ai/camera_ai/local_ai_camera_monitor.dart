@@ -5,8 +5,10 @@ import 'package:camera/camera.dart';
 import '../core/local_ai_engine.dart';
 import '../core/local_ai_event.dart';
 import '../object_ai/camera_object_source.dart';
+import '../object_ai/fallback_camera_object_source.dart';
 import '../object_ai/object_detection_detector.dart';
 import '../object_ai/rust_scan_camera_object_source.dart';
+import '../object_ai/tflite_object_detection_source.dart';
 import 'camera_face_source.dart';
 import 'camera_frame_sampler.dart';
 import 'face_presence_detector.dart';
@@ -27,7 +29,7 @@ class LocalAiCameraMonitor {
     this.onFrameAvailable,
   }) : faceSource = faceSource ?? _defaultFaceSource(),
        faceDetector = faceDetector ?? FacePresenceDetector(),
-       objectSource = objectSource ?? const RustScanCameraObjectSource(),
+       objectSource = objectSource ?? _defaultObjectSource(),
        objectDetector = objectDetector ?? ObjectDetectionDetector(),
        sampler = sampler ?? CameraFrameSampler();
 
@@ -50,6 +52,13 @@ class LocalAiCameraMonitor {
     return FallbackCameraFaceSource(
       primary: ModelBackedFaceSource(connector: TfliteFaceModelConnector()),
       fallback: const FrameHeuristicFaceSource(),
+    );
+  }
+
+  static CameraObjectSource _defaultObjectSource() {
+    return FallbackCameraObjectSource(
+      primary: TfliteObjectDetectionSource(),
+      fallback: const RustScanCameraObjectSource(),
     );
   }
 
