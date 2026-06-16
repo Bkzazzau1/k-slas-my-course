@@ -57,6 +57,8 @@ void main() {
       imageHeight: 500,
       timestamp: timestamp,
       confidenceThreshold: 0.55,
+      phoneBlockConfidence: 0.65,
+      manualReviewConfidence: 0.45,
       maximumObjects: 8,
       allowedLabels: const <String>{'background'},
     );
@@ -84,6 +86,8 @@ void main() {
       imageHeight: 500,
       timestamp: DateTime.now(),
       confidenceThreshold: 0.55,
+      phoneBlockConfidence: 0.65,
+      manualReviewConfidence: 0.45,
       maximumObjects: 8,
       allowedLabels: const <String>{'background'},
     );
@@ -106,6 +110,8 @@ void main() {
       imageHeight: 100,
       timestamp: DateTime.now(),
       confidenceThreshold: 0.55,
+      phoneBlockConfidence: 0.65,
+      manualReviewConfidence: 0.45,
       maximumObjects: 2,
       allowedLabels: const <String>{'background'},
     );
@@ -113,6 +119,31 @@ void main() {
     expect(observations, hasLength(2));
     expect(observations.first.label, 'book');
     expect(observations.last.label, 'calculator');
+  });
+
+  test('decoder marks phone below block threshold for manual review', () {
+    final observations = TfliteObjectOutputDecoder.decode(
+      rawBoxes: const <List<double>>[
+        <double>[0.10, 0.20, 0.40, 0.60],
+      ],
+      rawClasses: const <double>[1],
+      rawScores: const <double>[0.55],
+      rawCount: 1,
+      labels: const <String>['background', 'cell phone'],
+      imageWidth: 100,
+      imageHeight: 100,
+      timestamp: DateTime.now(),
+      confidenceThreshold: 0.45,
+      phoneBlockConfidence: 0.65,
+      manualReviewConfidence: 0.45,
+      maximumObjects: 8,
+      allowedLabels: const <String>{'background'},
+      prohibitedLabels: const <String>{'cell phone'},
+    );
+
+    expect(observations, hasLength(1));
+    expect(observations.first.metadata['reviewPolicy'], 'manualReview');
+    expect(observations.first.metadata['requiresHumanDecision'], true);
   });
 }
 

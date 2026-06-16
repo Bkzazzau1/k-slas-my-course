@@ -37,6 +37,31 @@ void main() {
   });
 
   test(
+    'ObjectDetectionDetector routes lower-confidence phone to manual review',
+    () async {
+      final detector = ObjectDetectionDetector();
+
+      final events = await detector.analyze(
+        ObjectDetectionObservation(
+          timestamp: DateTime.now(),
+          label: 'cell phone',
+          confidence: 0.52,
+          metadata: const <String, Object?>{
+            'reviewPolicy': 'manualReview',
+            'requiresHumanDecision': true,
+          },
+        ),
+      );
+
+      expect(events, hasLength(1));
+      expect(events.first.type.name, 'phoneDetected');
+      expect(events.first.severity.name, 'medium');
+      expect(events.first.riskPoints, 0);
+      expect(events.first.metadata['requiresHumanDecision'], true);
+    },
+  );
+
+  test(
     'ObjectDetectionDetector emits prohibited material for other labels',
     () async {
       final detector = ObjectDetectionDetector();

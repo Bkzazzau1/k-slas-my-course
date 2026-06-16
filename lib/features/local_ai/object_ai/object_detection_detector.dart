@@ -47,21 +47,19 @@ class ObjectDetectionDetector
 
     final reviewPolicy = input.metadata['reviewPolicy']?.toString();
     final manualReview = reviewPolicy == 'manualReview';
-    final points = isPhone ? 30 : (manualReview ? 0 : 25);
+    final points = manualReview ? 0 : (isPhone ? 30 : 25);
 
     return <LocalAiEvent>[
       LocalAiEvent(
         type: eventType,
-        severity: isPhone || !manualReview
-            ? LocalAiSeverity.high
-            : LocalAiSeverity.medium,
+        severity: manualReview ? LocalAiSeverity.medium : LocalAiSeverity.high,
         timestamp: input.timestamp,
         riskPoints: points,
         confidence: input.confidence,
-        message: isPhone
-            ? 'Phone detected in camera view.'
-            : manualReview
+        message: manualReview
             ? 'Manual review required for visible exam material: ${input.label}.'
+            : isPhone
+            ? 'Phone detected in camera view.'
             : 'Prohibited material detected: ${input.label}.',
         metadata: <String, Object?>{
           'label': input.label,

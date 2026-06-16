@@ -48,7 +48,8 @@ class LocalAiProctoringAdapter {
   }
 
   bool _isManualReviewObjectEvent(LocalAiEvent event) {
-    return event.type == LocalAiEventType.prohibitedMaterialDetected &&
+    return (event.type == LocalAiEventType.phoneDetected ||
+            event.type == LocalAiEventType.prohibitedMaterialDetected) &&
         event.metadata['requiresHumanDecision'] == true;
   }
 

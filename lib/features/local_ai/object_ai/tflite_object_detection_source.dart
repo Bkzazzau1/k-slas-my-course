@@ -14,7 +14,9 @@ class TfliteObjectDetectionConfig {
     this.inputChannels = 3,
     this.inputMinimum = 0.0,
     this.inputMaximum = 255.0,
-    this.confidenceThreshold = 0.55,
+    this.confidenceThreshold = 0.45,
+    this.phoneBlockConfidence = 0.65,
+    this.manualReviewConfidence = 0.45,
     this.maximumObjects = 8,
     this.outputBoxIndex = 0,
     this.outputClassIndex = 1,
@@ -55,6 +57,8 @@ class TfliteObjectDetectionConfig {
   final double inputMinimum;
   final double inputMaximum;
   final double confidenceThreshold;
+  final double phoneBlockConfidence;
+  final double manualReviewConfidence;
   final int maximumObjects;
   final int outputBoxIndex;
   final int outputClassIndex;
@@ -134,6 +138,8 @@ class TfliteObjectDetectionSource implements CameraObjectSource {
       imageHeight: image.height,
       timestamp: timestamp,
       confidenceThreshold: config.confidenceThreshold,
+      phoneBlockConfidence: config.phoneBlockConfidence,
+      manualReviewConfidence: config.manualReviewConfidence,
       maximumObjects: config.maximumObjects,
       allowedLabels: config.allowedLabels,
       prohibitedLabels: config.prohibitedLabels,
@@ -239,6 +245,8 @@ class TfliteObjectOutputDecoder {
     required int imageHeight,
     required DateTime timestamp,
     required double confidenceThreshold,
+    required double phoneBlockConfidence,
+    required double manualReviewConfidence,
     required int maximumObjects,
     required Set<String> allowedLabels,
     Set<String> prohibitedLabels = const <String>{},
@@ -263,6 +271,12 @@ class TfliteObjectOutputDecoder {
       if (prohibitedLabels.isNotEmpty && !isProhibited && !isManualReview) {
         continue;
       }
+      final reviewPolicy = isProhibited && score >= phoneBlockConfidence
+          ? 'prohibited'
+          : score >= manualReviewConfidence
+          ? 'manualReview'
+          : 'ignored';
+      if (reviewPolicy == 'ignored') continue;
       final box = rawBoxes[i];
       if (box.length < 4) continue;
 
@@ -288,7 +302,8 @@ class TfliteObjectOutputDecoder {
           metadata: <String, Object?>{
             'source': 'tflite_object_detection_source',
             'classIndex': classIndex,
-            'reviewPolicy': isProhibited ? 'prohibited' : 'manualReview',
+            'reviewPolicy': reviewPolicy,
+            'requiresHumanDecision': reviewPolicy == 'manualReview',
           },
         ),
       );
