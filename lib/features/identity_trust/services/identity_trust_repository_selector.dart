@@ -9,15 +9,17 @@ class IdentityTrustRepositorySelector {
     this.demoRepository,
     this.apiRepository,
     this.config,
+    this.runtimeMode,
   });
 
   final IdentityTrustRepository? demoRepository;
   final ApiIdentityTrustRepository? apiRepository;
   final CourseCatalogBackendConfig? config;
+  final LiveSessionRuntimeMode? runtimeMode;
 
   IdentityTrustRepository select() {
-    final runtimeMode = LiveSessionRuntimeModeStore.load();
-    if (runtimeMode != LiveSessionRuntimeMode.production) {
+    final mode = runtimeMode ?? LiveSessionRuntimeModeStore.load();
+    if (mode != LiveSessionRuntimeMode.production) {
       return demoRepository ?? DemoIdentityTrustRepository();
     }
 
@@ -28,8 +30,8 @@ class IdentityTrustRepositorySelector {
   }
 
   String get providerLabel {
-    final runtimeMode = LiveSessionRuntimeModeStore.load();
-    if (runtimeMode != LiveSessionRuntimeMode.production) {
+    final mode = runtimeMode ?? LiveSessionRuntimeModeStore.load();
+    if (mode != LiveSessionRuntimeMode.production) {
       return 'Demo identity trust repository';
     }
 
