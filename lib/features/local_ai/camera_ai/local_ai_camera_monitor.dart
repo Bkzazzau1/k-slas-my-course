@@ -19,6 +19,7 @@ class LocalAiCameraMonitor {
     CameraFaceSource? faceSource,
     FacePresenceDetector? faceDetector,
     CameraFrameSampler? sampler,
+    this.onFrameAvailable,
   }) : faceSource = faceSource ?? _defaultFaceSource(),
        faceDetector = faceDetector ?? FacePresenceDetector(),
        sampler = sampler ?? CameraFrameSampler();
@@ -28,6 +29,7 @@ class LocalAiCameraMonitor {
   final CameraFaceSource faceSource;
   final FacePresenceDetector faceDetector;
   final CameraFrameSampler sampler;
+  final void Function(CameraImage image, DateTime timestamp)? onFrameAvailable;
 
   bool _running = false;
   bool _analyzing = false;
@@ -37,9 +39,7 @@ class LocalAiCameraMonitor {
 
   static CameraFaceSource _defaultFaceSource() {
     return FallbackCameraFaceSource(
-      primary: ModelBackedFaceSource(
-        connector: TfliteFaceModelConnector(),
-      ),
+      primary: ModelBackedFaceSource(connector: TfliteFaceModelConnector()),
       fallback: const FrameHeuristicFaceSource(),
     );
   }
@@ -71,7 +71,9 @@ class LocalAiCameraMonitor {
 
   Future<void> _onFrame(CameraImage image) async {
     final now = DateTime.now();
-    if (!_running || _analyzing || !sampler.shouldProcess(now)) return;
+    if (!_running) return;
+    onFrameAvailable?.call(image, now);
+    if (_analyzing || !sampler.shouldProcess(now)) return;
 
     _analyzing = true;
     try {
@@ -91,10 +93,7 @@ class LocalAiCameraMonitor {
         _faceMissingSince ??= now;
       }
 
-      final events = await localAiEngine.runDetector(
-        faceDetector,
-        observation,
-      );
+      final events = await localAiEngine.runDetector(faceDetector, observation);
 
       await _handleImmediateCameraEvents(events);
     } finally {

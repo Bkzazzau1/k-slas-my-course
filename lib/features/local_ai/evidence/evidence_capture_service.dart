@@ -122,9 +122,8 @@ class EvidenceManifest {
       artifacts: ((json['artifacts'] as List?) ?? const <Object?>[])
           .whereType<Map>()
           .map(
-            (artifact) => EvidenceArtifact.fromJson(
-              Map<String, dynamic>.from(artifact),
-            ),
+            (artifact) =>
+                EvidenceArtifact.fromJson(Map<String, dynamic>.from(artifact)),
           )
           .toList(),
       sourceEvent: Map<String, Object?>.from(
@@ -220,7 +219,7 @@ class EvidenceCaptureService {
   EvidenceCaptureService({
     GetStorage? storage,
     EvidenceArtifactCaptureHook? artifactCaptureHook,
-  }) : _storage = storage ?? GetStorage(),
+  }) : _storage = storage,
        _artifactCaptureHook = artifactCaptureHook;
 
   static const _vaultPrefix = 'evidence.vault';
@@ -228,7 +227,7 @@ class EvidenceCaptureService {
   static final Map<String, List<Map<String, dynamic>>> _memoryVault =
       <String, List<Map<String, dynamic>>>{};
 
-  final GetStorage _storage;
+  final GetStorage? _storage;
   final EvidenceArtifactCaptureHook? _artifactCaptureHook;
 
   bool get _useMemoryStore => Get.testMode;
@@ -320,7 +319,8 @@ class EvidenceCaptureService {
     return raw
         .whereType<Map>()
         .map(
-          (entry) => EvidenceManifest.fromJson(Map<String, dynamic>.from(entry)),
+          (entry) =>
+              EvidenceManifest.fromJson(Map<String, dynamic>.from(entry)),
         )
         .where((manifest) => manifest.id.trim().isNotEmpty)
         .toList();
@@ -332,7 +332,7 @@ class EvidenceCaptureService {
       _memoryVault.remove(_vaultKey(safeStudentId));
       return;
     }
-    await _storage.remove(_vaultKey(safeStudentId));
+    await _box.remove(_vaultKey(safeStudentId));
   }
 
   Future<void> _saveManifest(EvidenceManifest manifest) async {
@@ -434,7 +434,7 @@ class EvidenceCaptureService {
         _memoryVault[key] ?? const <Map<String, dynamic>>[],
       );
     }
-    return (_storage.read(key) as List?) ?? const <dynamic>[];
+    return (_box.read(key) as List?) ?? const <dynamic>[];
   }
 
   Future<void> _writeVault(
@@ -448,6 +448,8 @@ class EvidenceCaptureService {
           .toList();
       return;
     }
-    await _storage.write(key, payload);
+    await _box.write(key, payload);
   }
+
+  GetStorage get _box => _storage ?? GetStorage();
 }

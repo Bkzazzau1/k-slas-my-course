@@ -2,13 +2,19 @@ import 'package:camera/camera.dart';
 
 import 'evidence_capture_service.dart';
 
+abstract class CameraEvidenceFrameProvider {
+  Future<EvidenceArtifact?> latestFrame(EvidenceArtifactRequest request);
+}
+
 class CameraEvidenceCaptureHook implements EvidenceArtifactCaptureHook {
   CameraEvidenceCaptureHook({
     required this.cameraController,
+    this.frameProvider,
     this.fallbackHook,
   });
 
   final CameraController cameraController;
+  final CameraEvidenceFrameProvider? frameProvider;
   final EvidenceArtifactCaptureHook? fallbackHook;
 
   @override
@@ -20,13 +26,14 @@ class CameraEvidenceCaptureHook implements EvidenceArtifactCaptureHook {
     }
 
     if (!cameraController.value.isInitialized) {
-      return _pending(
-        request,
-        reason: 'Camera controller is not initialized.',
-      );
+      final artifact = await _latestFrameArtifact(request);
+      if (artifact != null) return artifact;
+      return _pending(request, reason: 'Camera controller is not initialized.');
     }
 
     if (cameraController.value.isStreamingImages) {
+      final artifact = await _latestFrameArtifact(request);
+      if (artifact != null) return artifact;
       return _pending(
         request,
         reason: 'Camera image stream is active; snapshot capture deferred.',
@@ -34,10 +41,7 @@ class CameraEvidenceCaptureHook implements EvidenceArtifactCaptureHook {
     }
 
     if (cameraController.value.isTakingPicture) {
-      return _pending(
-        request,
-        reason: 'Camera is already taking a picture.',
-      );
+      return _pending(request, reason: 'Camera is already taking a picture.');
     }
 
     final file = await cameraController.takePicture();
@@ -59,6 +63,14 @@ class CameraEvidenceCaptureHook implements EvidenceArtifactCaptureHook {
         'reason': request.reason,
       },
     );
+  }
+
+  Future<EvidenceArtifact?> _latestFrameArtifact(
+    EvidenceArtifactRequest request,
+  ) async {
+    final provider = frameProvider;
+    if (provider == null) return null;
+    return provider.latestFrame(request);
   }
 
   EvidenceArtifact _pending(

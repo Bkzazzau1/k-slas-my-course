@@ -2,17 +2,24 @@ import 'package:camera/camera.dart';
 
 import '../../../features/local_ai/local_ai.dart';
 import '../controller/proctoring_controller.dart';
+import 'local_ai_evidence_hook_factory.dart';
 import 'local_ai_proctoring_adapter.dart';
 
 class LocalAiCameraBinding {
   LocalAiCameraBinding({
     required this.proctoringController,
     this.faceSource,
+    this.audioEvidenceClipProvider,
+    this.screenshotEvidenceProvider,
+    this.cameraFrameEvidenceProvider,
     this.evidenceArtifactCaptureHook,
   });
 
   final ProctoringController proctoringController;
   final CameraFaceSource? faceSource;
+  final AudioEvidenceClipProvider? audioEvidenceClipProvider;
+  final ScreenshotEvidenceProvider? screenshotEvidenceProvider;
+  final LatestCameraFrameEvidenceProvider? cameraFrameEvidenceProvider;
   final EvidenceArtifactCaptureHook? evidenceArtifactCaptureHook;
 
   LocalAiEngine? _engine;
@@ -26,12 +33,17 @@ class LocalAiCameraBinding {
     await detach();
 
     final engine = LocalAiEngine();
+    final frameEvidenceProvider =
+        cameraFrameEvidenceProvider ?? LatestCameraFrameEvidenceProvider();
     final adapter = LocalAiProctoringAdapter(
       localAiEngine: engine,
       proctoringController: proctoringController,
       evidenceCaptureService: EvidenceCaptureService(
-        artifactCaptureHook: CameraEvidenceCaptureHook(
+        artifactCaptureHook: LocalAiEvidenceHookFactory.build(
           cameraController: controller,
+          cameraFrameProvider: frameEvidenceProvider,
+          audioClipProvider: audioEvidenceClipProvider,
+          screenshotProvider: screenshotEvidenceProvider,
           fallbackHook: evidenceArtifactCaptureHook,
         ),
       ),
@@ -40,6 +52,7 @@ class LocalAiCameraBinding {
       cameraController: controller,
       localAiEngine: engine,
       faceSource: faceSource,
+      onFrameAvailable: frameEvidenceProvider.rememberFrame,
     );
 
     _engine = engine;

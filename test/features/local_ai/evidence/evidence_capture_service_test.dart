@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import 'package:my_courses/features/local_ai/local_ai.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   setUp(() {
     Get.testMode = true;
   });
@@ -69,7 +71,9 @@ void main() {
       isTrue,
     );
     expect(
-      manifests.first.artifacts.any((artifact) => artifact.kind == 'cameraClip'),
+      manifests.first.artifacts.any(
+        (artifact) => artifact.kind == 'cameraClip',
+      ),
       isTrue,
     );
   });
