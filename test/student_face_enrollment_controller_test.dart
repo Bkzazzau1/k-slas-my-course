@@ -16,7 +16,7 @@ void main() {
 
   test('student face enrollment completes after required samples', () async {
     await StudentProfileStorage.save(
-      const StudentProfileModel(
+      StudentProfileModel(
         schoolId: 'kslas',
         schoolName: 'K-SLAS',
         departmentId: 'csc',

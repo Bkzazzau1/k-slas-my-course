@@ -7,10 +7,9 @@ import 'local_ai_score_engine.dart';
 
 class LocalAiEngine {
   LocalAiEngine({
-    LocalAiConfig config = const LocalAiConfig(),
+    this.config = const LocalAiConfig(),
     LocalAiScoreEngine? scoreEngine,
-  })  : config = config,
-        scoreEngine = scoreEngine ?? LocalAiScoreEngine(config: config);
+  }) : scoreEngine = scoreEngine ?? LocalAiScoreEngine(config: config);
 
   final LocalAiConfig config;
   final LocalAiScoreEngine scoreEngine;

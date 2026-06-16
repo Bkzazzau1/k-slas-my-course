@@ -43,6 +43,7 @@ dependencies:
   flutter_rust_bridge: 2.11.1
   livekit_client: ^2.6.4
   http: ^1.6.0
+  tflite_flutter: ^0.12.1
 
 dev_dependencies:
   flutter_test:
