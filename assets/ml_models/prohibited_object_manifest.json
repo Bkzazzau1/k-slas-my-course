@@ -1,0 +1,51 @@
+{
+  "modelName": "KSLAS Prohibited Object Detector",
+  "modelFile": "assets/ml_models/prohibited_object_detector.tflite",
+  "labelsFile": "assets/ml_models/prohibited_object_labels.txt",
+  "modelFamily": "EfficientDet-Lite0 or SSD MobileNet style detector",
+  "status": "pending_model_file",
+  "input": {
+    "shape": [1, 320, 320, 3],
+    "dtype": "float32",
+    "normalization": "-1..1"
+  },
+  "outputs": [
+    {
+      "index": 0,
+      "name": "boxes",
+      "shape": [1, -1, 4],
+      "format": "[ymin, xmin, ymax, xmax]"
+    },
+    {
+      "index": 1,
+      "name": "classes",
+      "shape": [1, -1]
+    },
+    {
+      "index": 2,
+      "name": "scores",
+      "shape": [1, -1]
+    },
+    {
+      "index": 3,
+      "name": "count",
+      "shape": [1]
+    }
+  ],
+  "thresholds": {
+    "defaultConfidence": 0.55,
+    "phoneBlockConfidence": 0.65,
+    "manualReviewConfidence": 0.45
+  },
+  "policy": {
+    "autoPunishment": false,
+    "phoneHighRisk": true,
+    "bookPaperManualReview": true,
+    "humanDecisionRequired": true
+  },
+  "fallback": {
+    "enabled": true,
+    "source": "RustScanCameraObjectSource",
+    "reason": "Keep local detection available when the production TFLite model is missing or fails."
+  }
+}
