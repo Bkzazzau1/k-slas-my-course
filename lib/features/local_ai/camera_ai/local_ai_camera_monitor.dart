@@ -4,6 +4,9 @@ import 'package:camera/camera.dart';
 
 import '../core/local_ai_engine.dart';
 import '../core/local_ai_event.dart';
+import '../object_ai/camera_object_source.dart';
+import '../object_ai/object_detection_detector.dart';
+import '../object_ai/rust_scan_camera_object_source.dart';
 import 'camera_face_source.dart';
 import 'camera_frame_sampler.dart';
 import 'face_presence_detector.dart';
@@ -18,16 +21,22 @@ class LocalAiCameraMonitor {
     required this.localAiEngine,
     CameraFaceSource? faceSource,
     FacePresenceDetector? faceDetector,
+    CameraObjectSource? objectSource,
+    ObjectDetectionDetector? objectDetector,
     CameraFrameSampler? sampler,
     this.onFrameAvailable,
   }) : faceSource = faceSource ?? _defaultFaceSource(),
        faceDetector = faceDetector ?? FacePresenceDetector(),
+       objectSource = objectSource ?? const RustScanCameraObjectSource(),
+       objectDetector = objectDetector ?? ObjectDetectionDetector(),
        sampler = sampler ?? CameraFrameSampler();
 
   final CameraController cameraController;
   final LocalAiEngine localAiEngine;
   final CameraFaceSource faceSource;
   final FacePresenceDetector faceDetector;
+  final CameraObjectSource objectSource;
+  final ObjectDetectionDetector objectDetector;
   final CameraFrameSampler sampler;
   final void Function(CameraImage image, DateTime timestamp)? onFrameAvailable;
 
@@ -93,11 +102,29 @@ class LocalAiCameraMonitor {
         _faceMissingSince ??= now;
       }
 
-      final events = await localAiEngine.runDetector(faceDetector, observation);
+      final faceEvents = await localAiEngine.runDetector(
+        faceDetector,
+        observation,
+      );
+      await _runObjectDetection(image: image, timestamp: now);
 
-      await _handleImmediateCameraEvents(events);
+      await _handleImmediateCameraEvents(faceEvents);
     } finally {
       _analyzing = false;
+    }
+  }
+
+  Future<void> _runObjectDetection({
+    required CameraImage image,
+    required DateTime timestamp,
+  }) async {
+    final observations = await objectSource.analyzeFrame(
+      image: image,
+      timestamp: timestamp,
+    );
+    for (final observation in observations) {
+      final events = await localAiEngine.runDetector(objectDetector, observation);
+      await _handleImmediateCameraEvents(events);
     }
   }
 
