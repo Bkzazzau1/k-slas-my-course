@@ -1,5 +1,7 @@
 import '../../../data/services/live_session_runtime_mode_service.dart';
+import 'external_face_interpreter_bridge.dart';
 import 'face_embedding_connector.dart';
+import 'flutter_face_embedding_runner.dart';
 import 'onnx_face_embedding_connector.dart';
 import 'static_face_embedding_connector.dart';
 import 'tflite_face_embedding_connector.dart';
@@ -31,7 +33,7 @@ class FaceEmbeddingConnectorSelector {
       return onnxConnector ?? OnnxFaceEmbeddingConnector();
     }
 
-    return tfliteConnector ?? TfliteFaceEmbeddingConnector();
+    return tfliteConnector ?? _mobileConnector();
   }
 
   String get providerLabel {
@@ -51,6 +53,14 @@ class FaceEmbeddingConnectorSelector {
     return StaticFaceEmbeddingConnector(
       embedding: const <double>[1, 0, 0],
       version: 'demo-static-face-v1',
+    );
+  }
+
+  FaceEmbeddingConnector _mobileConnector() {
+    return TfliteFaceEmbeddingConnector(
+      runner: FlutterFaceEmbeddingRunner(
+        bridge: ExternalFaceInterpreterBridge(),
+      ),
     );
   }
 }
