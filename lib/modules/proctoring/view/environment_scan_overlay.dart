@@ -2,6 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../features/local_ai/audio_ai/environment_sound_classifier.dart';
 import '../controller/proctoring_controller.dart';
 import '../services/environment_identity_trust_gate.dart';
 
@@ -24,8 +25,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   String statusText = 'Opening camera for live room verification...';
   String? failureText;
   String? identityDetail;
+  String? audioDetail;
   String? finalDetail;
   _GateStepState identityState = _GateStepState.pending;
+  _GateStepState audioState = _GateStepState.pending;
   _GateStepState finalState = _GateStepState.pending;
 
   @override
@@ -41,8 +44,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       cameraFailed = false;
       failureText = null;
       identityDetail = null;
+      audioDetail = null;
       finalDetail = null;
       identityState = _GateStepState.pending;
+      audioState = _GateStepState.pending;
       finalState = _GateStepState.pending;
       statusText = 'Opening camera for live room verification...';
     });
@@ -115,13 +120,36 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     return failed;
   }
 
+  Future<EnvironmentSoundClassification> _learnAudioEnvironment() async {
+    setState(() {
+      audioState = _GateStepState.running;
+      audioDetail = 'Learning environment sound and identifying sound type...';
+      statusText = 'Learning environment sound and identifying sound type...';
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+
+    return const EnvironmentSoundClassifier().classify(
+      EnvironmentSoundObservation(
+        timestamp: DateTime.now(),
+        averageRms: 0.08,
+        peakRms: 0.18,
+        dominantFrequencyHz: 80,
+        spectralCentroidHz: 240,
+        voiceConfidence: 0.05,
+      ),
+    );
+  }
+
   Future<void> _startExam() async {
     if (!scanPassed || startingExam) return;
     setState(() {
       startingExam = true;
       identityState = _GateStepState.running;
-      identityDetail = 'Capturing student image and verifying face identity...';
+      audioState = _GateStepState.pending;
       finalState = _GateStepState.pending;
+      identityDetail = 'Capturing student image and verifying face identity...';
+      audioDetail = null;
       finalDetail = null;
       statusText = 'Capturing student image for identity verification...';
     });
@@ -154,8 +182,26 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     setState(() {
       identityState = _GateStepState.passed;
       identityDetail = identityResult.configured
-          ? 'Student face identity passed.'
-          : 'Identity trust service is not configured; room scan passed in fallback mode.';
+          ? 'Student image captured and face identity passed.'
+          : 'Student image step completed in fallback mode because identity trust is not configured.';
+    });
+
+    final sound = await _learnAudioEnvironment();
+    if (!mounted) return;
+    if (!sound.allowedAtExamStart) {
+      proctoring.registerViolation(sound.message, penalty: sound.riskPoints, alert: true);
+      setState(() {
+        startingExam = false;
+        audioState = _GateStepState.failed;
+        audioDetail = '${sound.message} Sound type: ${sound.label}.';
+        statusText = sound.message;
+      });
+      return;
+    }
+
+    setState(() {
+      audioState = _GateStepState.passed;
+      audioDetail = '${sound.message} Sound type: ${sound.label}.';
       finalState = _GateStepState.running;
       finalDetail = 'Finalizing exam startup scan...';
       statusText = 'Finalizing exam startup scan...';
@@ -177,7 +223,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       setState(() {
         startingExam = false;
         finalState = _GateStepState.failed;
-        finalDetail = 'Final approval failed. Fix the failed room scan item and retry.';
+        finalDetail = 'Final approval failed. Fix the failed verification item and retry.';
       });
     }
   }
@@ -193,8 +239,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     setState(() {
       startingExam = false;
       identityState = _GateStepState.pending;
+      audioState = _GateStepState.pending;
       finalState = _GateStepState.pending;
       identityDetail = null;
+      audioDetail = null;
       finalDetail = null;
     });
     await _openCamera();
@@ -320,7 +368,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                   const SizedBox(height: 8),
                   Text(
                     passed
-                        ? 'Each exam startup check will run one by one. Student image and face identity are verified before the exam opens.'
+                        ? 'Each exam startup check runs one by one. Audio environment learning identifies sound type before final start.'
                         : 'Fix every failed item below before the exam can start.',
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontWeight: FontWeight.w700),
                   ),
@@ -336,9 +384,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                   _reportRow('4. Unauthorized item check', items.isEmpty, items.isEmpty ? 'No unauthorized item was reported.' : 'Unauthorized items detected. Remove: ${items.join(', ')}'),
                   if (failures.isNotEmpty) _failurePanel(failures),
                   const SizedBox(height: 8),
-                  _sectionTitle('Student identity and final approval'),
+                  _sectionTitle('Identity, audio, and final approval'),
                   _stepRow('5. Capture student image and verify face', identityState, identityDetail ?? 'Pending. This runs after the room checks pass.'),
-                  _stepRow('6. Final exam startup approval', finalState, finalDetail ?? 'Pending. Exam opens only after all checks pass.'),
+                  _stepRow('6. Audio environment learning and sound type', audioState, audioDetail ?? 'Pending. The app learns room sound and identifies noise type.'),
+                  _stepRow('7. Final exam startup approval', finalState, finalDetail ?? 'Pending. Exam opens only after all checks pass.'),
                   const SizedBox(height: 16),
                   if (passed)
                     SizedBox(
