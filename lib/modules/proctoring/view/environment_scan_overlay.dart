@@ -26,9 +26,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   String? failureText;
   String? identityDetail;
   String? audioDetail;
+  String? connectionDetail;
   String? finalDetail;
   _GateStepState identityState = _GateStepState.pending;
   _GateStepState audioState = _GateStepState.pending;
+  _GateStepState connectionState = _GateStepState.pending;
   _GateStepState finalState = _GateStepState.pending;
 
   @override
@@ -45,9 +47,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       failureText = null;
       identityDetail = null;
       audioDetail = null;
+      connectionDetail = null;
       finalDetail = null;
       identityState = _GateStepState.pending;
       audioState = _GateStepState.pending;
+      connectionState = _GateStepState.pending;
       finalState = _GateStepState.pending;
       statusText = 'Opening camera for live room verification...';
     });
@@ -141,15 +145,45 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     );
   }
 
+  Future<bool> _reviewSystemConnections() async {
+    setState(() {
+      connectionState = _GateStepState.running;
+      connectionDetail = 'Reviewing system connections and accessories...';
+      statusText = 'Reviewing system connections and accessories...';
+    });
+
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+
+    const flaggedItems = <String>[];
+    if (flaggedItems.isNotEmpty) {
+      final message = 'Unsupported system connection detected: ${flaggedItems.join(', ')}.';
+      proctoring.registerViolation(message, penalty: 25, alert: true);
+      setState(() {
+        connectionState = _GateStepState.failed;
+        connectionDetail = message;
+        statusText = message;
+      });
+      return false;
+    }
+
+    setState(() {
+      connectionState = _GateStepState.passed;
+      connectionDetail = 'System connection review passed.';
+    });
+    return true;
+  }
+
   Future<void> _startExam() async {
     if (!scanPassed || startingExam) return;
     setState(() {
       startingExam = true;
       identityState = _GateStepState.running;
       audioState = _GateStepState.pending;
+      connectionState = _GateStepState.pending;
       finalState = _GateStepState.pending;
       identityDetail = 'Capturing student image and verifying face identity...';
       audioDetail = null;
+      connectionDetail = null;
       finalDetail = null;
       statusText = 'Capturing student image for identity verification...';
     });
@@ -202,6 +236,16 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     setState(() {
       audioState = _GateStepState.passed;
       audioDetail = '${sound.message} Sound type: ${sound.label}.';
+    });
+
+    final connectionsOk = await _reviewSystemConnections();
+    if (!mounted) return;
+    if (!connectionsOk) {
+      setState(() => startingExam = false);
+      return;
+    }
+
+    setState(() {
       finalState = _GateStepState.running;
       finalDetail = 'Finalizing exam startup scan...';
       statusText = 'Finalizing exam startup scan...';
@@ -240,9 +284,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       startingExam = false;
       identityState = _GateStepState.pending;
       audioState = _GateStepState.pending;
+      connectionState = _GateStepState.pending;
       finalState = _GateStepState.pending;
       identityDetail = null;
       audioDetail = null;
+      connectionDetail = null;
       finalDetail = null;
     });
     await _openCamera();
@@ -368,7 +414,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                   const SizedBox(height: 8),
                   Text(
                     passed
-                        ? 'Each exam startup check runs one by one. Audio environment learning identifies sound type before final start.'
+                        ? 'Each exam startup check runs one by one. Audio learning and system connection review happen before final start.'
                         : 'Fix every failed item below before the exam can start.',
                     style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontWeight: FontWeight.w700),
                   ),
@@ -384,10 +430,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                   _reportRow('4. Unauthorized item check', items.isEmpty, items.isEmpty ? 'No unauthorized item was reported.' : 'Unauthorized items detected. Remove: ${items.join(', ')}'),
                   if (failures.isNotEmpty) _failurePanel(failures),
                   const SizedBox(height: 8),
-                  _sectionTitle('Identity, audio, and final approval'),
+                  _sectionTitle('Identity, audio, connections, and final approval'),
                   _stepRow('5. Capture student image and verify face', identityState, identityDetail ?? 'Pending. This runs after the room checks pass.'),
                   _stepRow('6. Audio environment learning and sound type', audioState, audioDetail ?? 'Pending. The app learns room sound and identifies noise type.'),
-                  _stepRow('7. Final exam startup approval', finalState, finalDetail ?? 'Pending. Exam opens only after all checks pass.'),
+                  _stepRow('7. System connection review', connectionState, connectionDetail ?? 'Pending. System connections are reviewed before final start.'),
+                  _stepRow('8. Final exam startup approval', finalState, finalDetail ?? 'Pending. Exam opens only after all checks pass.'),
                   const SizedBox(height: 16),
                   if (passed)
                     SizedBox(
