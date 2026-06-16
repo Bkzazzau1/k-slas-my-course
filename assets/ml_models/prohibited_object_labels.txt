@@ -1,0 +1,10 @@
+background
+cell phone
+book
+laptop
+calculator
+tablet
+earphones
+headphones
+paper notes
+extra screen
