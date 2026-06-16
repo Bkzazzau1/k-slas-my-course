@@ -120,6 +120,11 @@ class DashboardView extends GetView<DashboardController> {
                               Routes.examSetup,
                             ),
                             _DashAction(
+                              'Face ID setup',
+                              Icons.face_retouching_natural_outlined,
+                              Routes.faceEnrollment,
+                            ),
+                            _DashAction(
                               'Receipts & offline',
                               Icons.receipt_long_outlined,
                               Routes.results,
@@ -168,8 +173,8 @@ class _PriorityHero extends StatelessWidget {
     final subtitle = hasAction
         ? '$draftCount saved draft${draftCount == 1 ? '' : 's'} • $pendingCount pending sync item${pendingCount == 1 ? '' : 's'}'
         : latest == null
-        ? 'Start a course, assessment, or live class from the actions below.'
-        : 'Latest receipt: ${latest!.courseCode} • ${latest!.status}';
+            ? 'Start a course, assessment, or live class from the actions below.'
+            : 'Latest receipt: ${latest!.courseCode} • ${latest!.status}';
 
     return Container(
       padding: const EdgeInsets.all(16),
