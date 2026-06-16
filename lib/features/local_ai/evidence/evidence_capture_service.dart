@@ -42,6 +42,9 @@ class EvidenceArtifact {
   final int? sizeBytes;
   final Map<String, Object?> metadata;
 
+  bool get isCaptured => status == 'captured';
+  bool get isPending => status.startsWith('pending');
+
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
     'kind': kind,
@@ -118,7 +121,11 @@ class EvidenceManifest {
       manifestPath: (json['manifestPath'] as String?) ?? '',
       artifacts: ((json['artifacts'] as List?) ?? const <Object?>[])
           .whereType<Map>()
-          .map((artifact) => EvidenceArtifact.fromJson(Map<String, dynamic>.from(artifact)))
+          .map(
+            (artifact) => EvidenceArtifact.fromJson(
+              Map<String, dynamic>.from(artifact),
+            ),
+          )
           .toList(),
       sourceEvent: Map<String, Object?>.from(
         (json['sourceEvent'] as Map?) ?? const <String, Object?>{},
@@ -147,7 +154,8 @@ class EvidenceCaptureResult {
   final String? cameraClipPath;
   final EvidenceManifest? manifest;
 
-  bool get hasEvidence => manifestPath != null ||
+  bool get hasEvidence =>
+      manifestPath != null ||
       screenshotPath != null ||
       audioClipPath != null ||
       cameraClipPath != null;
@@ -184,8 +192,36 @@ class EvidenceCaptureResult {
   }
 }
 
+class EvidenceArtifactRequest {
+  const EvidenceArtifactRequest({
+    required this.evidenceId,
+    required this.kind,
+    required this.mimeType,
+    required this.studentId,
+    required this.sessionId,
+    required this.event,
+    this.reason,
+  });
+
+  final String evidenceId;
+  final String kind;
+  final String mimeType;
+  final String studentId;
+  final String sessionId;
+  final LocalAiEvent event;
+  final String? reason;
+}
+
+abstract class EvidenceArtifactCaptureHook {
+  Future<EvidenceArtifact?> captureArtifact(EvidenceArtifactRequest request);
+}
+
 class EvidenceCaptureService {
-  EvidenceCaptureService({GetStorage? storage}) : _storage = storage ?? GetStorage();
+  EvidenceCaptureService({
+    GetStorage? storage,
+    EvidenceArtifactCaptureHook? artifactCaptureHook,
+  }) : _storage = storage ?? GetStorage(),
+       _artifactCaptureHook = artifactCaptureHook;
 
   static const _vaultPrefix = 'evidence.vault';
   static const _maxManifestsPerStudent = 500;
@@ -193,6 +229,7 @@ class EvidenceCaptureService {
       <String, List<Map<String, dynamic>>>{};
 
   final GetStorage _storage;
+  final EvidenceArtifactCaptureHook? _artifactCaptureHook;
 
   bool get _useMemoryStore => Get.testMode;
 
@@ -214,11 +251,35 @@ class EvidenceCaptureService {
         mimeType: 'application/json',
       ),
       if (request.captureScreenshot)
-        _pendingArtifact(evidenceId, 'screenshot', 'image/png'),
+        await _captureOrMarkPending(
+          evidenceId: evidenceId,
+          kind: 'screenshot',
+          mimeType: 'image/png',
+          studentId: studentId,
+          sessionId: sessionId,
+          event: request.event,
+          reason: request.reason,
+        ),
       if (request.captureAudioClip)
-        _pendingArtifact(evidenceId, 'audioClip', 'audio/wav'),
+        await _captureOrMarkPending(
+          evidenceId: evidenceId,
+          kind: 'audioClip',
+          mimeType: 'audio/wav',
+          studentId: studentId,
+          sessionId: sessionId,
+          event: request.event,
+          reason: request.reason,
+        ),
       if (request.captureCameraClip)
-        _pendingArtifact(evidenceId, 'cameraClip', 'video/mp4'),
+        await _captureOrMarkPending(
+          evidenceId: evidenceId,
+          kind: 'cameraClip',
+          mimeType: 'video/mp4',
+          studentId: studentId,
+          sessionId: sessionId,
+          event: request.event,
+          reason: request.reason,
+        ),
     ];
 
     final manifest = EvidenceManifest(
@@ -258,7 +319,9 @@ class EvidenceCaptureService {
     final raw = _readVault(safeStudentId);
     return raw
         .whereType<Map>()
-        .map((entry) => EvidenceManifest.fromJson(Map<String, dynamic>.from(entry)))
+        .map(
+          (entry) => EvidenceManifest.fromJson(Map<String, dynamic>.from(entry)),
+        )
         .where((manifest) => manifest.id.trim().isNotEmpty)
         .toList();
   }
@@ -282,11 +345,49 @@ class EvidenceCaptureService {
     await _writeVault(manifest.studentId, payload);
   }
 
+  Future<EvidenceArtifact> _captureOrMarkPending({
+    required String evidenceId,
+    required String kind,
+    required String mimeType,
+    required String studentId,
+    required String sessionId,
+    required LocalAiEvent event,
+    required String? reason,
+  }) async {
+    final hook = _artifactCaptureHook;
+    if (hook != null) {
+      try {
+        final artifact = await hook.captureArtifact(
+          EvidenceArtifactRequest(
+            evidenceId: evidenceId,
+            kind: kind,
+            mimeType: mimeType,
+            studentId: studentId,
+            sessionId: sessionId,
+            event: event,
+            reason: reason,
+          ),
+        );
+        if (artifact != null) return artifact;
+      } catch (error) {
+        return _pendingArtifact(
+          evidenceId,
+          kind,
+          mimeType,
+          error: error.toString(),
+        );
+      }
+    }
+
+    return _pendingArtifact(evidenceId, kind, mimeType);
+  }
+
   EvidenceArtifact _pendingArtifact(
     String evidenceId,
     String kind,
-    String mimeType,
-  ) {
+    String mimeType, {
+    String? error,
+  }) {
     final extension = switch (kind) {
       'screenshot' => 'png',
       'audioClip' => 'wav',
@@ -297,10 +398,11 @@ class EvidenceCaptureService {
       id: '$evidenceId-$kind',
       kind: kind,
       path: 'evidence://pending/$evidenceId/$kind.$extension',
-      status: 'pendingPlatformCapture',
+      status: error == null ? 'pendingPlatformCapture' : 'captureHookFailed',
       mimeType: mimeType,
-      metadata: const <String, Object?>{
+      metadata: <String, Object?>{
         'note': 'Platform capture hook not attached yet.',
+        if (error != null) 'error': error,
       },
     );
   }
