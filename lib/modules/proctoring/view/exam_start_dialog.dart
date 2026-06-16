@@ -25,8 +25,8 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
   late final ProctoringController _proctoring;
 
   _CheckStepState _fortress = _CheckStepState.pending;
+  _CheckStepState _cameraRoomIdentity = _CheckStepState.pending;
   _CheckStepState _acoustic = _CheckStepState.pending;
-  _CheckStepState _identity = _CheckStepState.pending;
   bool _running = false;
   bool _permissionNoticeAccepted = false;
   String? _errorText;
@@ -58,7 +58,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
               const SizedBox(height: 12),
               const _PermissionLine(
                 icon: Icons.camera_alt_rounded,
-                label: 'Camera for live identity and environment scan',
+                label: 'Camera for room scan, student image capture, and face identity verification',
               ),
               const _PermissionLine(
                 icon: Icons.mic_rounded,
@@ -74,7 +74,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Your browser or operating system may show its own permission popup next. Choose Allow to continue.',
+                'Every verification runs one by one. If any check fails, K-SLAS will show the exact failed item before the exam opens.',
                 style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.72),
                   fontWeight: FontWeight.w600,
@@ -119,8 +119,8 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
 
     _proctoring.requestEnvironmentScan(
       _isExam
-          ? 'Complete a live camera environment scan before this high-stakes exam can begin.'
-          : 'Complete a live camera environment scan before this graded assessment can begin.',
+          ? 'Complete the room scan, student image capture, and face identity verification before this high-stakes exam can begin.'
+          : 'Complete the room scan, student image capture, and face identity verification before this graded assessment can begin.',
     );
 
     final timeout = DateTime.now().add(const Duration(minutes: 3));
@@ -154,7 +154,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
       _running = true;
       _errorText = null;
       _fortress = _CheckStepState.running;
-      _identity = _CheckStepState.pending;
+      _cameraRoomIdentity = _CheckStepState.pending;
       _acoustic = _CheckStepState.pending;
     });
 
@@ -171,23 +171,23 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
 
     setState(() {
       _fortress = _CheckStepState.passed;
-      _identity = _CheckStepState.running;
+      _cameraRoomIdentity = _CheckStepState.running;
     });
 
     final identityOk = await _runCameraEnvironmentScan();
     if (!mounted) return;
     if (!identityOk) {
       setState(() {
-        _identity = _CheckStepState.failed;
+        _cameraRoomIdentity = _CheckStepState.failed;
         _running = false;
         _errorText =
-            'Camera/environment verification failed. Allow camera access, complete the scan, or return to the dashboard.';
+            'Room scan, student image capture, or face identity verification failed. Fix the failed item shown on the verification screen.';
       });
       return;
     }
 
     setState(() {
-      _identity = _CheckStepState.passed;
+      _cameraRoomIdentity = _CheckStepState.passed;
       _acoustic = _CheckStepState.running;
     });
 
@@ -237,9 +237,9 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
               ),
             ),
             const SizedBox(height: 12),
-            _CheckRow(label: 'OS fortress anti-capture', state: _fortress),
-            _CheckRow(label: 'Live camera identity and room scan', state: _identity),
-            _CheckRow(label: 'Microphone acoustic tether', state: _acoustic),
+            _CheckRow(label: '1. OS fortress anti-capture', state: _fortress),
+            _CheckRow(label: '2. Room scan + student image + face identity', state: _cameraRoomIdentity),
+            _CheckRow(label: '3. Microphone acoustic tether', state: _acoustic),
             if (!_permissionNoticeAccepted) ...[
               const SizedBox(height: 10),
               Text(
@@ -274,7 +274,7 @@ class _ExamStartDialogState extends State<ExamStartDialog> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.verified_user_outlined),
-            label: Text(_running ? 'Verifying...' : 'Verify and start'),
+            label: Text(_running ? 'Verifying...' : 'Verify step by step'),
           ),
         ],
       ),
