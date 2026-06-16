@@ -7,28 +7,24 @@ import 'package:my_courses/features/identity_trust/services/tflite_face_embeddin
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test(
-    'TFLite face embedding connector produces a real embedding',
-    () async {
-      final connector = TfliteFaceEmbeddingConnector(
-        runner: FlutterFaceEmbeddingRunner(
-          bridge: ExternalFaceInterpreterBridge(),
-        ),
-      );
+  test('TFLite face embedding connector produces a real embedding', () async {
+    final connector = TfliteFaceEmbeddingConnector(
+      runner: FlutterFaceEmbeddingRunner(
+        bridge: ExternalFaceInterpreterBridge(),
+      ),
+    );
 
-      final output = await connector.run(
-        FaceEmbeddingInput(
-          values: List<int>.filled(112 * 112 * 3, 128),
-          width: 112,
-          height: 112,
-          format: 'rgb',
-        ),
-      );
+    final output = await connector.run(
+      FaceEmbeddingInput(
+        values: List<int>.filled(112 * 112 * 3, 128),
+        width: 112,
+        height: 112,
+        format: 'rgb',
+      ),
+    );
 
-      expect(output.embedding, isNotEmpty);
-      expect(output.embedding.length, 192);
-      expect(output.isUsable, true);
-    },
-    skip: 'Enable after assets/ml_models/mobilefacenet.tflite is added locally and native runtime is available.',
-  );
+    expect(output.embedding, isNotEmpty);
+    expect(output.embedding.length, 192);
+    expect(output.isUsable, true);
+  });
 }
