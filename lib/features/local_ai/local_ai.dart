@@ -6,6 +6,7 @@ export 'camera_ai/camera_frame_sampler.dart';
 export 'camera_ai/camera_readiness_service.dart';
 export 'camera_ai/face_model_connector.dart';
 export 'camera_ai/face_presence_detector.dart';
+export 'camera_ai/frame_heuristic_face_source.dart';
 export 'camera_ai/local_ai_camera_monitor.dart';
 export 'camera_ai/model_backed_face_source.dart';
 export 'core/local_ai_config.dart';
