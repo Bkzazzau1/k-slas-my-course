@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../../data/models/integrity_models.dart';
+import '../../../data/services/integrity_event_writer.dart';
+import '../../../data/services/integrity_ledger_service.dart';
 import '../view/environment_scan_overlay.dart';
 import '../view/exam_start_dialog.dart';
 
@@ -54,6 +56,7 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
   final cumulativeRiskScore = 0.obs;
   final pendingLedgerSyncCount = 0.obs;
   final activeSessionId = ''.obs;
+  final activeStudentId = IntegrityLedgerService.defaultStudentId.obs;
 
   static const double _minimumLightingScore = 0.55;
   static const int _strictStrikeLimit = 2;
@@ -68,6 +71,8 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
   VoidCallback? _onSessionTerminated;
   VoidCallback? _onPauseExamTimer;
   VoidCallback? _onResumeExamTimer;
+  Future<bool> Function(List<Map<String, dynamic>> payload)?
+  _integrityLedgerUploader;
   Completer<bool>? _startupEnvironmentScanCompleter;
   bool _environmentDialogOpen = false;
   bool _terminationHandled = false;
@@ -91,10 +96,37 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     _onResumeExamTimer = null;
   }
 
-  Future<void> syncIntegrityLedger() async {}
+  void configureIntegrityLedgerUploader(
+    Future<bool> Function(List<Map<String, dynamic>> payload) uploader,
+  ) {
+    _integrityLedgerUploader = uploader;
+  }
+
+  Future<void> syncIntegrityLedger({String? studentId}) async {
+    final safeStudentId = IntegrityLedgerService.safeStudentId(
+      studentId ?? activeStudentId.value,
+    );
+
+    if (_integrityLedgerUploader == null) {
+      pendingLedgerSyncCount.value = IntegrityLedgerService.pendingLedgerCount(
+        safeStudentId,
+      );
+      return;
+    }
+
+    await IntegrityLedgerService.flushPendingLedger(
+      studentId: safeStudentId,
+      uploader: _integrityLedgerUploader!,
+    );
+
+    pendingLedgerSyncCount.value = IntegrityLedgerService.pendingLedgerCount(
+      safeStudentId,
+    );
+  }
 
   Future<void> startSession({
     required AssessmentIntegrityLevel level,
+    String? studentId,
     VoidCallback? onAutoSubmit,
     VoidCallback? onSessionTerminated,
   }) async {
@@ -121,6 +153,10 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
         level != AssessmentIntegrityLevel.highStakesExam;
     activeSessionId.value =
         '${DateTime.now().millisecondsSinceEpoch}-${level.name}';
+    activeStudentId.value = IntegrityLedgerService.safeStudentId(studentId);
+    pendingLedgerSyncCount.value = IntegrityLedgerService.pendingLedgerCount(
+      activeStudentId.value,
+    );
     _terminationHandled = false;
     _autoSubmitted = false;
     _onAutoSubmit = onAutoSubmit;
@@ -172,6 +208,7 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     examMonitoringArmed.value = false;
     isExamPaused.value = false;
     activeSessionId.value = '';
+    activeStudentId.value = IntegrityLedgerService.defaultStudentId;
     strictViolationStrikes.value = 0;
     multiFaceStrikes.value = 0;
     speechStrikes.value = 0;
@@ -186,9 +223,13 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
 
   Future<bool> startExamSequence(
     String examId, {
+    String? studentId,
     VoidCallback? onVerified,
   }) async {
-    await startSession(level: AssessmentIntegrityLevel.highStakesExam);
+    await startSession(
+      level: AssessmentIntegrityLevel.highStakesExam,
+      studentId: studentId,
+    );
     final verified =
         await Get.dialog<bool>(
           ExamStartDialog(examId: examId),
@@ -223,12 +264,14 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
 
   Future<bool> startAssessmentSequence(
     String assessmentId, {
+    String? studentId,
     VoidCallback? onVerified,
     VoidCallback? onAutoSubmit,
     VoidCallback? onSessionTerminated,
   }) async {
     await startSession(
       level: AssessmentIntegrityLevel.gradedAssessment,
+      studentId: studentId,
       onAutoSubmit: onAutoSubmit,
       onSessionTerminated: onSessionTerminated,
     );
@@ -304,17 +347,44 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     } catch (_) {}
   }
 
-  void registerViolation(String reason, {int penalty = 0, bool alert = false}) {
+  void registerViolation(
+    String reason, {
+    int penalty = 0,
+    bool alert = false,
+    bool persistToLedger = true,
+    String? eventType,
+    String? severity,
+    double? confidence,
+    String? evidencePath,
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) {
     if (reason.toLowerCase().startsWith('terminal violation')) {
-      _terminateSession(reason);
+      _terminateSession(
+        reason,
+        persistToLedger: persistToLedger,
+        eventType: eventType ?? 'terminalViolation',
+        severity: severity ?? 'critical',
+        confidence: confidence,
+        evidencePath: evidencePath,
+        metadata: metadata,
+      );
       return;
     }
+
     final effectivePenalty = _isStrictSession && penalty == 0 ? 8 : penalty;
+
     _logViolation(
       reason,
       penalty: effectivePenalty,
       alert: alert || _isStrictSession,
+      persistToLedger: persistToLedger,
+      eventType: eventType,
+      severity: severity,
+      confidence: confidence,
+      evidencePath: evidencePath,
+      metadata: metadata,
     );
+
     _terminateIfIntegrityTooLow(reason);
   }
 
@@ -520,13 +590,34 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     _environmentDialogOpen = false;
   }
 
-  void _terminateSession(String reason) {
+  void _terminateSession(
+    String reason, {
+    bool persistToLedger = true,
+    String? eventType,
+    String? severity,
+    double? confidence,
+    String? evidencePath,
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) {
     if (_terminationHandled) return;
+
     _terminationHandled = true;
     sessionTerminated.value = true;
     terminationReason.value = reason;
     _resolveStartupEnvironmentScan(success: false);
-    _logViolation('Session terminated: $reason', penalty: 100, alert: false);
+
+    _logViolation(
+      'Session terminated: $reason',
+      penalty: 100,
+      alert: false,
+      persistToLedger: persistToLedger,
+      eventType: eventType ?? 'sessionTerminated',
+      severity: severity ?? 'critical',
+      confidence: confidence,
+      evidencePath: evidencePath,
+      metadata: metadata,
+    );
+
     if (!_autoSubmitted) {
       _autoSubmitted = true;
       _onAutoSubmit?.call();
@@ -547,19 +638,43 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     String reason, {
     required int penalty,
     required bool alert,
+    bool persistToLedger = true,
+    String? eventType,
+    String? severity,
+    double? confidence,
+    String? evidencePath,
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     final stamp = DateTime.now().toIso8601String();
     violationLog.insert(0, '$stamp • $reason');
+
     if (penalty > 0) {
       violationCount.value += 1;
       cumulativeRiskScore.value += penalty;
       integrityScore.value = (integrityScore.value - penalty).clamp(0, 100);
+
       if (cumulativeRiskScore.value >= 60) {
         riskTier.value = IntegrityRiskTier.high;
       } else if (cumulativeRiskScore.value >= 25) {
         riskTier.value = IntegrityRiskTier.medium;
       }
+
+      if (persistToLedger) {
+        unawaited(
+          _writeControllerLedgerEvent(
+            reason: reason,
+            penalty: penalty,
+            alert: alert,
+            eventType: eventType,
+            severity: severity,
+            confidence: confidence,
+            evidencePath: evidencePath,
+            metadata: metadata,
+          ),
+        );
+      }
     }
+
     if (alert && Get.context != null) {
       Get.snackbar(
         'Integrity warning',
@@ -569,6 +684,95 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
       );
     }
     _terminateIfIntegrityTooLow(reason);
+  }
+
+  Future<void> _writeControllerLedgerEvent({
+    required String reason,
+    required int penalty,
+    required bool alert,
+    String? eventType,
+    String? severity,
+    double? confidence,
+    String? evidencePath,
+    Map<String, Object?> metadata = const <String, Object?>{},
+  }) async {
+    final profile = await IntegrityEventWriter.write(
+      studentId: activeStudentId.value,
+      sessionId: activeSessionId.value,
+      reason: reason,
+      points: penalty,
+      level: currentLevel.value?.name,
+      scoreAfter: integrityScore.value,
+      strikesAfter: strictViolationStrikes.value,
+      tier: riskTier.value,
+      riskAfter: cumulativeRiskScore.value,
+      type: eventType ?? _eventTypeForReason(reason),
+      severity: severity ?? _severityForPenalty(penalty),
+      confidence: confidence,
+      alert: alert,
+      filePath: evidencePath,
+      data: <String, Object?>{'source': 'proctoring_controller', ...metadata},
+    );
+
+    pendingLedgerSyncCount.value = profile.unsyncedLedgerCount;
+  }
+
+  String _eventTypeForReason(String reason) {
+    final lower = reason.toLowerCase();
+
+    if (lower.contains('app moved away') || lower.contains('background')) {
+      return 'appBackgroundExit';
+    }
+
+    if (lower.contains('environment scan rejected') ||
+        lower.contains('environment scan timed out')) {
+      return 'environmentScanRejected';
+    }
+
+    if (lower.contains('environment scan') && lower.contains('blocked')) {
+      return 'environmentScanBlocked';
+    }
+
+    if (lower.contains('session terminated')) {
+      return 'sessionTerminated';
+    }
+
+    if (lower.contains('multiple faces')) {
+      return 'multipleFacesDetected';
+    }
+
+    if (lower.contains('phone')) {
+      return 'phoneDetected';
+    }
+
+    if (lower.contains('voice') || lower.contains('speech')) {
+      return 'humanVoiceDetected';
+    }
+
+    if (lower.contains('copy') || lower.contains('paste')) {
+      return 'copyPasteDetected';
+    }
+
+    if (lower.contains('strict violation')) {
+      return 'strictViolation';
+    }
+
+    if (lower.contains('verification failed')) {
+      return 'verificationFailed';
+    }
+
+    if (lower.contains('launch blocked')) {
+      return 'launchBlocked';
+    }
+
+    return 'controllerViolation';
+  }
+
+  String _severityForPenalty(int penalty) {
+    if (penalty >= 80) return 'critical';
+    if (penalty >= 25) return 'high';
+    if (penalty >= 10) return 'medium';
+    return 'low';
   }
 
   @override

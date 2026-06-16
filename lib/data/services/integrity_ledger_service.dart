@@ -201,20 +201,16 @@ class IntegrityLedgerService {
     final all = loadLedger(safeId);
     final updated = all.map((entry) {
       if (pendingIds.contains(entry.id)) {
-        return entry.copyWith(
-          syncedAt: now,
-          clearLastSyncError: true,
-        );
+        return entry.copyWith(syncedAt: now, clearLastSyncError: true);
       }
       return entry;
     }).toList();
     await saveLedger(safeId, updated);
 
     final remaining = pendingLedgerEntries(safeId).length;
-    final profile = loadOrCreateProfile(safeId).copyWith(
-      lastSyncedAt: now,
-      unsyncedLedgerCount: remaining,
-    );
+    final profile = loadOrCreateProfile(
+      safeId,
+    ).copyWith(lastSyncedAt: now, unsyncedLedgerCount: remaining);
     await saveProfile(profile);
     return pending.length;
   }
@@ -238,9 +234,11 @@ class IntegrityLedgerService {
 
   static List<dynamic> _readLedgerPayload(String studentId) {
     final key = _ledgerKey(studentId);
-    if (_useMemoryStore) return List<Map<String, dynamic>>.from(
-          _memoryLedgers[key] ?? const <Map<String, dynamic>>[],
-        );
+    if (_useMemoryStore) {
+      return List<Map<String, dynamic>>.from(
+        _memoryLedgers[key] ?? const <Map<String, dynamic>>[],
+      );
+    }
     return (_box.read(key) as List?) ?? const <dynamic>[];
   }
 
@@ -285,9 +283,9 @@ class IntegrityLedgerService {
     }).toList();
     await saveLedger(studentId, updated);
 
-    final profile = loadOrCreateProfile(studentId).copyWith(
-      unsyncedLedgerCount: pendingLedgerEntries(studentId).length,
-    );
+    final profile = loadOrCreateProfile(
+      studentId,
+    ).copyWith(unsyncedLedgerCount: pendingLedgerEntries(studentId).length);
     await saveProfile(profile);
   }
 }

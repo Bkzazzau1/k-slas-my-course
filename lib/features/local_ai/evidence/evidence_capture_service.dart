@@ -52,7 +52,7 @@ class EvidenceCaptureResult {
 
 class EvidenceCaptureService {
   Future<EvidenceCaptureResult> capture(EvidenceCaptureRequest request) async {
-    // TODO: connect to platform-specific screenshot, audio, and camera clip capture.
+    // Future integration: platform screenshot, audio, and camera clip capture.
     // The MVP should only call this for high-risk events to reduce storage cost.
     return EvidenceCaptureResult(event: request.event);
   }

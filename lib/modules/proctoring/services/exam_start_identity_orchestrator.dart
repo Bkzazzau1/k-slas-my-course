@@ -2,7 +2,6 @@ import 'package:camera/camera.dart';
 
 import '../../../data/services/student_profile_storage.dart';
 import '../../../features/identity_trust/identity_trust.dart';
-import '../../../features/identity_trust/services/preprocessed_camera_face_embedding_input_provider.dart';
 
 class ExamStartIdentityRequest {
   const ExamStartIdentityRequest({
@@ -25,15 +24,17 @@ class ExamStartIdentityOrchestrator {
     required IdentityTrustRepository repository,
     required FaceEmbeddingConnector connector,
     ExamStartTrustService? trustService,
-  })  : _repository = repository,
-        _connector = connector,
-        _trustService = trustService;
+  }) : _repository = repository,
+       _connector = connector,
+       _trustService = trustService;
 
   final IdentityTrustRepository _repository;
   final FaceEmbeddingConnector _connector;
   final ExamStartTrustService? _trustService;
 
-  Future<ExamStartTrustDecision> verify(ExamStartIdentityRequest request) async {
+  Future<ExamStartTrustDecision> verify(
+    ExamStartIdentityRequest request,
+  ) async {
     final studentId = request.studentId ?? _resolveStudentId();
     if (studentId.trim().isEmpty) {
       return const ExamStartTrustDecision(
@@ -56,7 +57,8 @@ class ExamStartIdentityOrchestrator {
       ),
     );
 
-    final trustService = _trustService ??
+    final trustService =
+        _trustService ??
         ExamStartTrustService(
           repository: _repository,
           liveFaceEmbeddingSource: liveSource,

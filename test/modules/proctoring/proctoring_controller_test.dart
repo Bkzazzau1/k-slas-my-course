@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:my_courses/data/services/integrity_ledger_service.dart';
 import 'package:my_courses/modules/proctoring/controller/proctoring_controller.dart';
 
 void main() {
@@ -89,4 +90,33 @@ void main() {
       );
     },
   );
+
+  test('controller violations should be written to integrity ledger', () async {
+    Get.testMode = true;
+    await IntegrityLedgerService.clearAllForStudent('KASU/CSC/001');
+
+    final controller = ProctoringController();
+
+    await controller.startSession(
+      level: AssessmentIntegrityLevel.highStakesExam,
+      studentId: 'KASU/CSC/001',
+    );
+
+    controller.registerViolation(
+      'Environment scan rejected: lighting below strict threshold.',
+      penalty: 15,
+      alert: false,
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    final pending = IntegrityLedgerService.pendingLedgerEntries('KASU/CSC/001');
+
+    expect(pending, isNotEmpty);
+    expect(pending.first.eventType, 'environmentScanRejected');
+    expect(pending.first.severity, 'medium');
+    expect(pending.first.metadata['source'], 'proctoring_controller');
+
+    await controller.stopSession(silent: true);
+  });
 }

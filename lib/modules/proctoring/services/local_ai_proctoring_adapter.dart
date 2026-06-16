@@ -35,6 +35,7 @@ class LocalAiProctoringAdapter {
       message,
       penalty: event.riskPoints,
       alert: event.shouldAlertInvigilator,
+      persistToLedger: false,
     );
 
     unawaited(_writeEvent(event, message));
@@ -42,7 +43,7 @@ class LocalAiProctoringAdapter {
 
   Future<void> _writeEvent(LocalAiEvent event, String message) async {
     final profile = await IntegrityEventWriter.write(
-      studentId: event.studentId,
+      studentId: event.studentId ?? proctoringController.activeStudentId.value,
       sessionId: event.sessionId ?? proctoringController.activeSessionId.value,
       reason: message,
       points: event.riskPoints,
@@ -56,10 +57,7 @@ class LocalAiProctoringAdapter {
       confidence: event.confidence,
       alert: event.shouldAlertInvigilator,
       filePath: event.evidencePath,
-      data: <String, Object?>{
-        'source': 'local_ai',
-        'rawEvent': event.toJson(),
-      },
+      data: <String, Object?>{'source': 'local_ai', 'rawEvent': event.toJson()},
     );
     proctoringController.pendingLedgerSyncCount.value =
         profile.unsyncedLedgerCount;
