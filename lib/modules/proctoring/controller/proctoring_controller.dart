@@ -49,6 +49,7 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
   final scanForbiddenObjects = <String>[].obs;
   final scanLightingScore = 0.0.obs;
   final scanRotationConfirmed = false.obs;
+  final scanUnauthorizedItemsReviewed = false.obs;
   final isExamPaused = false.obs;
   final examStartupScanCompleted = false.obs;
 
@@ -476,6 +477,14 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
       );
       return;
     }
+    if (!scanUnauthorizedItemsReviewed.value) {
+      _logViolation(
+        'Environment scan rejected: unauthorized material scan not confirmed.',
+        penalty: 15,
+        alert: true,
+      );
+      return;
+    }
     if (scanLightingScore.value < _minimumLightingScore) {
       _logViolation(
         'Environment scan rejected: lighting below strict threshold.',
@@ -524,6 +533,7 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     scanForbiddenObjects.clear();
     scanLightingScore.value = 0;
     scanRotationConfirmed.value = false;
+    scanUnauthorizedItemsReviewed.value = false;
     _pauseExamClock();
     _startScanProgressTimer();
 
@@ -541,9 +551,15 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     _scanTimer?.cancel();
     _scanTimer = Timer.periodic(const Duration(milliseconds: 650), (_) {
       if (!scanRequired.value || !scanInProgress.value) return;
-      scanProgress.value = (scanProgress.value + 0.04).clamp(0.0, 1.0);
-      if (scanProgress.value >= 1.0) {
-        scanRotationConfirmed.value = true;
+      final target = !scanRotationConfirmed.value
+          ? 0.35
+          : !scanUnauthorizedItemsReviewed.value
+          ? 0.70
+          : 1.0;
+      scanProgress.value = (scanProgress.value + 0.04).clamp(0.0, target);
+      if (scanProgress.value >= 1.0 &&
+          scanRotationConfirmed.value &&
+          scanUnauthorizedItemsReviewed.value) {
         scanInProgress.value = false;
       }
     });
@@ -560,6 +576,7 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
     scanForbiddenObjects.clear();
     scanLightingScore.value = 0;
     scanRotationConfirmed.value = false;
+    scanUnauthorizedItemsReviewed.value = false;
     if (clearStartup) examStartupScanCompleted.value = false;
   }
 

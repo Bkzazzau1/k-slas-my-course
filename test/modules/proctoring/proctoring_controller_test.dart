@@ -52,6 +52,36 @@ void main() {
     expect(controller.isExamPaused.value, false);
   });
 
+  test('Startup scan timer should not auto-confirm room checks', () async {
+    controller.requestEnvironmentScan('Verify room before exam start.');
+
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+    expect(controller.scanProgress.value, greaterThan(0));
+    expect(controller.scanProgress.value, lessThanOrEqualTo(0.35));
+    expect(controller.scanRotationConfirmed.value, false);
+    expect(controller.scanUnauthorizedItemsReviewed.value, false);
+    expect(controller.examStartupScanCompleted.value, false);
+  });
+
+  test(
+    'Should reject final startup approval until material scan is confirmed',
+    () async {
+      controller.requestEnvironmentScan('Verify room before exam start.');
+      controller.scanProgress.value = 1;
+      controller.scanRotationConfirmed.value = true;
+      controller.scanLightingScore.value = 1;
+
+      await controller.completeEnvironmentScan();
+
+      expect(controller.examStartupScanCompleted.value, false);
+      expect(
+        controller.violationLog.join(' '),
+        contains('unauthorized material scan not confirmed'),
+      );
+    },
+  );
+
   test(
     'Should terminate session immediately on terminal hardware detection',
     () {

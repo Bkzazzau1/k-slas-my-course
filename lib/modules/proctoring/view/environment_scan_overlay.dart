@@ -64,14 +64,21 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
         setState(() {
           cameraFailed = true;
           statusText = 'No camera was found.';
-          failureText = 'Connect a webcam and allow camera access from Windows privacy settings.';
+          failureText =
+              'Connect a webcam and allow camera access from Windows privacy settings.';
         });
         return;
       }
 
-      final front = cameras.where((c) => c.lensDirection == CameraLensDirection.front).toList();
+      final front = cameras
+          .where((c) => c.lensDirection == CameraLensDirection.front)
+          .toList();
       final selected = front.isNotEmpty ? front.first : cameras.first;
-      final controller = CameraController(selected, ResolutionPreset.medium, enableAudio: false);
+      final controller = CameraController(
+        selected,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
       camera = controller;
       await controller.initialize();
 
@@ -84,7 +91,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       if (!mounted) return;
       setState(() {
         cameraReady = true;
-        statusText = 'Camera ready. Slowly rotate your device until the scan reaches 100%.';
+        statusText =
+            'Camera ready. Slowly rotate your device until the scan reaches 100%.';
       });
     } catch (e) {
       if (!mounted) return;
@@ -103,7 +111,9 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
         cameraReady &&
         proctoring.scanProgress.value >= 1.0 &&
         proctoring.scanRotationConfirmed.value &&
-        proctoring.scanLightingScore.value >= proctoring.minimumScanLightingScore &&
+        proctoring.scanUnauthorizedItemsReviewed.value &&
+        proctoring.scanLightingScore.value >=
+            proctoring.minimumScanLightingScore &&
         proctoring.scanForbiddenObjects.isEmpty;
   }
 
@@ -113,13 +123,25 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       failed.add(failureText ?? 'Camera did not open successfully.');
     }
     if (!proctoring.scanRotationConfirmed.value) {
-      failed.add('Room rotation failed. Rotate the camera around the room until the scan reaches 100%.');
+      failed.add(
+        'Room rotation failed. Rotate the camera around the room until the scan reaches 100%.',
+      );
     }
-    if (proctoring.scanLightingScore.value < proctoring.minimumScanLightingScore) {
-      failed.add('Lighting failed. Move to a brighter room or switch on more light.');
+    if (!proctoring.scanUnauthorizedItemsReviewed.value) {
+      failed.add(
+        'Unauthorized material scan was not completed. Scan your desk, walls, lap, and surrounding room.',
+      );
+    }
+    if (proctoring.scanLightingScore.value <
+        proctoring.minimumScanLightingScore) {
+      failed.add(
+        'Lighting failed. Move to a brighter room or switch on more light.',
+      );
     }
     if (proctoring.scanForbiddenObjects.isNotEmpty) {
-      failed.add('Unauthorized item check failed. Remove: ${proctoring.scanForbiddenObjects.join(', ')}.');
+      failed.add(
+        'Unauthorized item check failed. Remove: ${proctoring.scanForbiddenObjects.join(', ')}.',
+      );
     }
     return failed;
   }
@@ -156,7 +178,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
 
     const flaggedItems = <String>[];
     if (flaggedItems.isNotEmpty) {
-      final message = 'Unsupported system connection detected: ${flaggedItems.join(', ')}.';
+      final message =
+          'Unsupported system connection detected: ${flaggedItems.join(', ')}.';
       proctoring.registerViolation(message, penalty: 25, alert: true);
       setState(() {
         connectionState = _GateStepState.failed;
@@ -223,7 +246,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     final sound = await _learnAudioEnvironment();
     if (!mounted) return;
     if (!sound.allowedAtExamStart) {
-      proctoring.registerViolation(sound.message, penalty: sound.riskPoints, alert: true);
+      proctoring.registerViolation(
+        sound.message,
+        penalty: sound.riskPoints,
+        alert: true,
+      );
       setState(() {
         startingExam = false;
         audioState = _GateStepState.failed;
@@ -255,7 +282,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     await Future<void>.delayed(const Duration(milliseconds: 160));
     if (!mounted) return;
 
-    if (proctoring.examStartupScanCompleted.value && !proctoring.scanRequired.value) {
+    if (proctoring.examStartupScanCompleted.value &&
+        !proctoring.scanRequired.value) {
       setState(() {
         finalState = _GateStepState.passed;
         finalDetail = 'All checks passed. Starting exam...';
@@ -267,7 +295,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       setState(() {
         startingExam = false;
         finalState = _GateStepState.failed;
-        finalDetail = 'Final approval failed. Fix the failed verification item and retry.';
+        finalDetail =
+            'Final approval failed. Fix the failed verification item and retry.';
       });
     }
   }
@@ -280,6 +309,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     proctoring.scanForbiddenObjects.clear();
     proctoring.scanLightingScore.value = 0;
     proctoring.scanRotationConfirmed.value = false;
+    proctoring.scanUnauthorizedItemsReviewed.value = false;
     setState(() {
       startingExam = false;
       identityState = _GateStepState.pending;
@@ -292,6 +322,35 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       finalDetail = null;
     });
     await _openCamera();
+  }
+
+  void _confirmRoomRotation() {
+    if (!cameraReady || cameraFailed || startingExam) return;
+    proctoring.scanRotationConfirmed.value = true;
+    if (proctoring.scanProgress.value < 0.40) {
+      proctoring.scanProgress.value = 0.40;
+    }
+    setState(() {
+      statusText =
+          'Rotation confirmed. Now scan your desk, walls, lap, and surrounding room for unauthorized materials.';
+    });
+  }
+
+  void _confirmUnauthorizedMaterialScan() {
+    if (!cameraReady ||
+        cameraFailed ||
+        startingExam ||
+        !proctoring.scanRotationConfirmed.value) {
+      return;
+    }
+    proctoring.scanUnauthorizedItemsReviewed.value = true;
+    if (proctoring.scanProgress.value < 0.75) {
+      proctoring.scanProgress.value = 0.75;
+    }
+    setState(() {
+      statusText =
+          'Unauthorized-material scan confirmed. Finishing room verification before identity, audio, and connection checks.';
+    });
   }
 
   Future<void> _returnToDashboard() async {
@@ -358,9 +417,18 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
             children: [
               _topPill('Scan ${(progress * 100).round()}%', progress >= 1.0),
               const SizedBox(width: 8),
-              _topPill('Light ${(proctoring.scanLightingScore.value * 100).round()}%', proctoring.scanLightingScore.value >= proctoring.minimumScanLightingScore),
+              _topPill(
+                'Light ${(proctoring.scanLightingScore.value * 100).round()}%',
+                proctoring.scanLightingScore.value >=
+                    proctoring.minimumScanLightingScore,
+              ),
               const SizedBox(width: 8),
               _topPill('Rotation', proctoring.scanRotationConfirmed.value),
+              const SizedBox(width: 8),
+              _topPill(
+                'Materials',
+                proctoring.scanUnauthorizedItemsReviewed.value,
+              ),
             ],
           ),
         ),
@@ -377,7 +445,9 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   Widget _reportPage(BuildContext context) {
     final progress = proctoring.scanProgress.value.clamp(0.0, 1.0);
     final passed = scanPassed;
-    final lightOk = proctoring.scanLightingScore.value >= proctoring.minimumScanLightingScore;
+    final lightOk =
+        proctoring.scanLightingScore.value >=
+        proctoring.minimumScanLightingScore;
     final items = proctoring.scanForbiddenObjects.toList();
     final failures = _failedRoomChecks;
     final cs = Theme.of(context).colorScheme;
@@ -401,12 +471,22 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                 children: [
                   Row(
                     children: [
-                      Icon(passed ? Icons.task_alt_rounded : Icons.warning_rounded, color: passed ? Colors.green : Colors.orange, size: 42),
+                      Icon(
+                        passed ? Icons.task_alt_rounded : Icons.warning_rounded,
+                        color: passed ? Colors.green : Colors.orange,
+                        size: 42,
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          passed ? 'Room checks passed — continue verification' : 'Room checks failed',
-                          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900),
+                          passed
+                              ? 'Room checks passed — continue verification'
+                              : 'Room checks failed',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                     ],
@@ -416,49 +496,143 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                     passed
                         ? 'Each exam startup check runs one by one. Audio learning and system connection review happen before final start.'
                         : 'Fix every failed item below before the exam can start.',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.72), fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.72),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 14),
-                  Text('Room scan ${(progress * 100).round()}%', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+                  Text(
+                    'Room scan ${(progress * 100).round()}%',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  LinearProgressIndicator(value: progress, minHeight: 12, borderRadius: BorderRadius.circular(999), color: passed ? Colors.green : Colors.orange),
+                  LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 12,
+                    borderRadius: BorderRadius.circular(999),
+                    color: passed ? Colors.green : Colors.orange,
+                  ),
                   const SizedBox(height: 18),
                   _sectionTitle('Room verification'),
-                  _reportRow('1. Camera access', cameraReady && !cameraFailed, cameraReady ? 'Camera opened successfully.' : (failureText ?? 'Camera access failed.')),
-                  _reportRow('2. Room rotation', proctoring.scanRotationConfirmed.value, proctoring.scanRotationConfirmed.value ? 'Rotation completed.' : 'Rotation failed. Rotate the camera around the room again.'),
-                  _reportRow('3. Lighting check', lightOk, lightOk ? 'Lighting is acceptable.' : 'Lighting failed. Move to a brighter room or switch on more light.'),
-                  _reportRow('4. Unauthorized item check', items.isEmpty, items.isEmpty ? 'No unauthorized item was reported.' : 'Unauthorized items detected. Remove: ${items.join(', ')}'),
+                  _reportRow(
+                    '1. Camera access',
+                    cameraReady && !cameraFailed,
+                    cameraReady
+                        ? 'Camera opened successfully.'
+                        : (failureText ?? 'Camera access failed.'),
+                  ),
+                  _reportRow(
+                    '2. Room rotation',
+                    proctoring.scanRotationConfirmed.value,
+                    proctoring.scanRotationConfirmed.value
+                        ? 'Rotation completed.'
+                        : 'Rotation failed. Rotate the camera around the room again.',
+                  ),
+                  _reportRow(
+                    '3. Lighting check',
+                    lightOk,
+                    lightOk
+                        ? 'Lighting is acceptable.'
+                        : 'Lighting failed. Move to a brighter room or switch on more light.',
+                  ),
+                  _reportRow(
+                    '4. Unauthorized item check',
+                    proctoring.scanUnauthorizedItemsReviewed.value &&
+                        items.isEmpty,
+                    !proctoring.scanUnauthorizedItemsReviewed.value
+                        ? 'Pending. Scan your desk, walls, lap, and surrounding room before this can pass.'
+                        : items.isEmpty
+                        ? 'No unauthorized item was reported.'
+                        : 'Unauthorized items detected. Remove: ${items.join(', ')}',
+                  ),
                   if (failures.isNotEmpty) _failurePanel(failures),
                   const SizedBox(height: 8),
-                  _sectionTitle('Identity, audio, connections, and final approval'),
-                  _stepRow('5. Capture student image and verify face', identityState, identityDetail ?? 'Pending. This runs after the room checks pass.'),
-                  _stepRow('6. Audio environment learning and sound type', audioState, audioDetail ?? 'Pending. The app learns room sound and identifies noise type.'),
-                  _stepRow('7. System connection review', connectionState, connectionDetail ?? 'Pending. System connections are reviewed before final start.'),
-                  _stepRow('8. Final exam startup approval', finalState, finalDetail ?? 'Pending. Exam opens only after all checks pass.'),
+                  _sectionTitle(
+                    'Identity, audio, connections, and final approval',
+                  ),
+                  _stepRow(
+                    '5. Capture student image and verify face',
+                    identityState,
+                    identityDetail ??
+                        'Pending. This runs after the room checks pass.',
+                  ),
+                  _stepRow(
+                    '6. Audio environment learning and sound type',
+                    audioState,
+                    audioDetail ??
+                        'Pending. The app learns room sound and identifies noise type.',
+                  ),
+                  _stepRow(
+                    '7. System connection review',
+                    connectionState,
+                    connectionDetail ??
+                        'Pending. System connections are reviewed before final start.',
+                  ),
+                  _stepRow(
+                    '8. Final exam startup approval',
+                    finalState,
+                    finalDetail ??
+                        'Pending. Exam opens only after all checks pass.',
+                  ),
                   const SizedBox(height: 16),
                   if (passed)
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
                         onPressed: startingExam ? null : _startExam,
-                        icon: startingExam ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.play_arrow_rounded),
-                        label: Text(startingExam ? 'Running verification...' : 'Run next verification / start exam'),
-                        style: FilledButton.styleFrom(backgroundColor: cs.primary, foregroundColor: cs.onPrimary, padding: const EdgeInsets.symmetric(vertical: 14)),
+                        icon: startingExam
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.play_arrow_rounded),
+                        label: Text(
+                          startingExam
+                              ? 'Running verification...'
+                              : 'Run next verification / start exam',
+                        ),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: cs.primary,
+                          foregroundColor: cs.onPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
                       ),
                     )
                   else ...[
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton.icon(onPressed: returningDashboard ? null : _retryScan, icon: const Icon(Icons.refresh_rounded), label: const Text('Fix failed checks and rescan')),
+                      child: FilledButton.icon(
+                        onPressed: returningDashboard ? null : _retryScan,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Fix failed checks and rescan'),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: returningDashboard ? null : _returnToDashboard,
+                        onPressed: returningDashboard
+                            ? null
+                            : _returnToDashboard,
                         icon: const Icon(Icons.dashboard_rounded),
-                        label: Text(returningDashboard ? 'Returning...' : 'Return to dashboard / change environment'),
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: BorderSide(color: Colors.white.withValues(alpha: 0.35))),
+                        label: Text(
+                          returningDashboard
+                              ? 'Returning...'
+                              : 'Return to dashboard / change environment',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.35),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -473,35 +647,105 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
 
   Widget _cameraLayer() {
     if (cameraFailed) {
-      return Center(child: Text(failureText ?? 'Camera failed', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)));
+      return Center(
+        child: Text(
+          failureText ?? 'Camera failed',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      );
     }
     final c = camera;
     if (!cameraReady || c == null || !c.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator(color: Colors.white));
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     }
     return Center(
-      child: AspectRatio(aspectRatio: c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio, child: CameraPreview(c)),
+      child: AspectRatio(
+        aspectRatio: c.value.aspectRatio == 0 ? 16 / 9 : c.value.aspectRatio,
+        child: CameraPreview(c),
+      ),
     );
   }
 
   Widget _bottomPanel(double progress) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.72), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.16))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        LinearProgressIndicator(value: progress, minHeight: 10, borderRadius: BorderRadius.circular(999), color: Colors.green),
-        const SizedBox(height: 12),
-        Text(statusText, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(onPressed: returningDashboard ? null : _returnToDashboard, style: OutlinedButton.styleFrom(foregroundColor: Colors.white), icon: const Icon(Icons.dashboard_rounded), label: Text(returningDashboard ? 'Returning...' : 'Return to dashboard')),
-      ]),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 10,
+            borderRadius: BorderRadius.circular(999),
+            color: Colors.green,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            statusText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (cameraReady && !proctoring.scanRotationConfirmed.value) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: startingExam ? null : _confirmRoomRotation,
+                icon: const Icon(Icons.rotate_90_degrees_ccw_rounded),
+                label: const Text('I have rotated the camera around the room'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ] else if (cameraReady &&
+              !proctoring.scanUnauthorizedItemsReviewed.value) ...[
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: startingExam
+                    ? null
+                    : _confirmUnauthorizedMaterialScan,
+                icon: const Icon(Icons.fact_check_rounded),
+                label: const Text('I scanned for unauthorized materials'),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          OutlinedButton.icon(
+            onPressed: returningDashboard ? null : _returnToDashboard,
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+            icon: const Icon(Icons.dashboard_rounded),
+            label: Text(
+              returningDashboard ? 'Returning...' : 'Return to dashboard',
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _sectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, top: 4),
-      child: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w900,
+          fontSize: 15,
+        ),
+      ),
     );
   }
 
@@ -509,20 +753,42 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.orange.withValues(alpha: 0.35))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Failed items to fix', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 6),
-        ...failures.map((failure) => Padding(
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Failed items to fix',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 6),
+          ...failures.map(
+            (failure) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text('• $failure', style: TextStyle(color: Colors.white.withValues(alpha: 0.78), fontWeight: FontWeight.w700)),
-            )),
-      ]),
+              child: Text(
+                '• $failure',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.78),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _reportRow(String title, bool ok, String detail) {
-    return _statusRow(title, ok ? _GateStepState.passed : _GateStepState.failed, detail);
+    return _statusRow(
+      title,
+      ok ? _GateStepState.passed : _GateStepState.failed,
+      detail,
+    );
   }
 
   Widget _stepRow(String title, _GateStepState state, String detail) {
@@ -531,7 +797,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
 
   Widget _statusRow(String title, _GateStepState state, String detail) {
     final (icon, color) = switch (state) {
-      _GateStepState.pending => (Icons.radio_button_unchecked_rounded, Colors.blueGrey),
+      _GateStepState.pending => (
+        Icons.radio_button_unchecked_rounded,
+        Colors.blueGrey,
+      ),
       _GateStepState.running => (Icons.hourglass_bottom_rounded, Colors.blue),
       _GateStepState.passed => (Icons.check_circle_rounded, Colors.green),
       _GateStepState.failed => (Icons.error_rounded, Colors.orange),
@@ -539,12 +808,40 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.26))),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color),
-        const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)), const SizedBox(height: 3), Text(detail, style: TextStyle(color: Colors.white.withValues(alpha: 0.76), fontWeight: FontWeight.w600))])),
-      ]),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.26)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.76),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -553,8 +850,21 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.62), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withValues(alpha: 0.45))),
-        child: Text(text, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 11)),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.62),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.45)),
+        ),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.w700,
+            fontSize: 11,
+          ),
+        ),
       ),
     );
   }
