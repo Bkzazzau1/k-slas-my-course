@@ -1,3 +1,4 @@
+export 'services/camera_face_enrollment_sampler.dart';
 export 'services/face_embedding_connector.dart';
 export 'services/face_image_decoder.dart';
 export 'services/face_image_preprocessor.dart';
