@@ -114,9 +114,14 @@ class SettingsView extends GetView<SettingsController> {
             ),
 
             const SizedBox(height: 16),
-            _SectionTitle('Account & subscription'),
+            _SectionTitle('Account & security'),
             const SizedBox(height: 8),
 
+            _Tile(
+              title: 'Face enrollment',
+              value: 'Register / update',
+              onTap: () => Get.toNamed('/identity/face-enrollment'),
+            ),
             _Tile(
               title: 'Student backend login',
               value: StudentAuthService.hasToken
@@ -124,6 +129,10 @@ class SettingsView extends GetView<SettingsController> {
                   : 'Not connected',
               onTap: _openStudentLoginSheet,
             ),
+
+            const SizedBox(height: 16),
+            _SectionTitle('Subscription'),
+            const SizedBox(height: 8),
 
             const _Tile(
               title: 'Plan status',
