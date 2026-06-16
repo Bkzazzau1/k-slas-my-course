@@ -24,21 +24,36 @@ class DeviceFingerprint {
 }
 
 class DeviceFingerprintService {
-  DeviceFingerprintService({GetStorage? storage})
-      : _storage = storage ?? GetStorage();
+  DeviceFingerprintService({
+    GetStorage? storage,
+    DeviceFingerprint? fixedFingerprint,
+  })  : _storage = storage,
+        _fixedFingerprint = fixedFingerprint;
 
   static const String _deviceIdKey = 'k_slas_trusted_device_id';
 
-  final GetStorage _storage;
+  final GetStorage? _storage;
+  final DeviceFingerprint? _fixedFingerprint;
   final Uuid _uuid = const Uuid();
 
   Future<DeviceFingerprint> getOrCreateFingerprint({
     String appVersion = '1.0.0',
   }) async {
-    var deviceId = _storage.read<String>(_deviceIdKey);
+    final fixed = _fixedFingerprint;
+    if (fixed != null) {
+      return DeviceFingerprint(
+        deviceId: fixed.deviceId,
+        deviceType: fixed.deviceType,
+        osName: fixed.osName,
+        appVersion: appVersion,
+      );
+    }
+
+    final storage = _storage ?? GetStorage();
+    var deviceId = storage.read<String>(_deviceIdKey);
     if (deviceId == null || deviceId.trim().isEmpty) {
       deviceId = _uuid.v4();
-      await _storage.write(_deviceIdKey, deviceId);
+      await storage.write(_deviceIdKey, deviceId);
     }
 
     return DeviceFingerprint(
