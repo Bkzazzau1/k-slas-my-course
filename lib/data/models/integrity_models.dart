@@ -98,6 +98,14 @@ class IntegrityLedgerEntry {
     required this.riskTierAtEvent,
     required this.riskScoreAfter,
     required this.evidenceVault,
+    this.eventType = 'integrity_violation',
+    this.severity = 'medium',
+    this.confidence,
+    this.shouldAlert = false,
+    this.evidencePath,
+    this.metadata = const <String, Object?>{},
+    this.syncAttemptCount = 0,
+    this.lastSyncError,
     this.syncedAt,
   });
 
@@ -113,9 +121,23 @@ class IntegrityLedgerEntry {
   final IntegrityRiskTier riskTierAtEvent;
   final int riskScoreAfter;
   final String evidenceVault;
+  final String eventType;
+  final String severity;
+  final double? confidence;
+  final bool shouldAlert;
+  final String? evidencePath;
+  final Map<String, Object?> metadata;
+  final int syncAttemptCount;
+  final String? lastSyncError;
   final DateTime? syncedAt;
 
-  IntegrityLedgerEntry copyWith({DateTime? syncedAt}) {
+  IntegrityLedgerEntry copyWith({
+    DateTime? syncedAt,
+    bool clearSyncedAt = false,
+    int? syncAttemptCount,
+    String? lastSyncError,
+    bool clearLastSyncError = false,
+  }) {
     return IntegrityLedgerEntry(
       id: id,
       studentId: studentId,
@@ -129,7 +151,17 @@ class IntegrityLedgerEntry {
       riskTierAtEvent: riskTierAtEvent,
       riskScoreAfter: riskScoreAfter,
       evidenceVault: evidenceVault,
-      syncedAt: syncedAt ?? this.syncedAt,
+      eventType: eventType,
+      severity: severity,
+      confidence: confidence,
+      shouldAlert: shouldAlert,
+      evidencePath: evidencePath,
+      metadata: metadata,
+      syncAttemptCount: syncAttemptCount ?? this.syncAttemptCount,
+      lastSyncError: clearLastSyncError
+          ? null
+          : (lastSyncError ?? this.lastSyncError),
+      syncedAt: clearSyncedAt ? null : (syncedAt ?? this.syncedAt),
     );
   }
 
@@ -147,6 +179,14 @@ class IntegrityLedgerEntry {
       'riskTierAtEvent': riskTierAtEvent.name,
       'riskScoreAfter': riskScoreAfter,
       'evidenceVault': evidenceVault,
+      'eventType': eventType,
+      'severity': severity,
+      'confidence': confidence,
+      'shouldAlert': shouldAlert,
+      'evidencePath': evidencePath,
+      'metadata': metadata,
+      'syncAttemptCount': syncAttemptCount,
+      'lastSyncError': lastSyncError,
       'syncedAt': syncedAt?.toIso8601String(),
     };
   }
@@ -174,6 +214,14 @@ class IntegrityLedgerEntry {
       riskTierAtEvent: riskTier,
       riskScoreAfter: _asInt(map['riskScoreAfter']),
       evidenceVault: (map['evidenceVault'] ?? '').toString(),
+      eventType: (map['eventType'] ?? 'integrity_violation').toString(),
+      severity: (map['severity'] ?? 'medium').toString(),
+      confidence: _asDouble(map['confidence']),
+      shouldAlert: _asBool(map['shouldAlert']),
+      evidencePath: map['evidencePath']?.toString(),
+      metadata: _asStringObjectMap(map['metadata']),
+      syncAttemptCount: _asInt(map['syncAttemptCount']),
+      lastSyncError: map['lastSyncError']?.toString(),
       syncedAt: DateTime.tryParse((map['syncedAt'] ?? '').toString()),
     );
   }
@@ -183,4 +231,23 @@ int _asInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double? _asDouble(Object? value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString());
+}
+
+bool _asBool(Object? value) {
+  if (value is bool) return value;
+  final normalized = value?.toString().toLowerCase().trim();
+  return normalized == 'true' || normalized == '1' || normalized == 'yes';
+}
+
+Map<String, Object?> _asStringObjectMap(Object? value) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) return value.cast<String, Object?>();
+  return const <String, Object?>{};
 }
