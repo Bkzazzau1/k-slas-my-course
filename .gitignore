@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local calibration assets and reports
+/tool/calibration_reports/*.csv
+/tool/calibration_reports/*.json
+/tool/calibration_samples/**/*.jpg
+/tool/calibration_samples/**/*.jpeg
+/tool/calibration_samples/**/*.png
+/tool/calibration_samples/**/*.webp
+/tool/calibration_samples/**/*.bmp
