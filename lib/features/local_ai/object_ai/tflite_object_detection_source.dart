@@ -1,4 +1,5 @@
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import 'camera_object_source.dart';
@@ -7,33 +8,47 @@ import 'object_detection_detector.dart';
 class TfliteObjectDetectionConfig {
   const TfliteObjectDetectionConfig({
     this.assetPath = 'assets/ml_models/prohibited_object_detector.tflite',
+    this.labelsAssetPath = 'assets/ml_models/prohibited_object_labels.txt',
     this.inputWidth = 320,
     this.inputHeight = 320,
     this.inputChannels = 3,
-    this.inputMinimum = -1.0,
-    this.inputMaximum = 1.0,
+    this.inputMinimum = 0.0,
+    this.inputMaximum = 255.0,
     this.confidenceThreshold = 0.55,
     this.maximumObjects = 8,
     this.outputBoxIndex = 0,
     this.outputClassIndex = 1,
     this.outputScoreIndex = 2,
     this.outputCountIndex = 3,
-    this.labels = const <String>[
-      'background',
-      'cell phone',
+    this.labels = const <String>[],
+    this.prohibitedLabels = const <String>{'cell phone'},
+    this.manualReviewLabels = const <String>{
+      'backpack',
       'book',
+      'keyboard',
       'laptop',
-      'calculator',
-      'tablet',
-      'earphones',
-      'headphones',
-      'paper notes',
-      'extra screen',
-    ],
-    this.allowedLabels = const <String>{'background', 'none', 'clean'},
+      'mouse',
+      'remote',
+      'tv',
+      'handbag',
+      'suitcase',
+      'bottle',
+      'cup',
+      'scissors',
+    },
+    this.allowedLabels = const <String>{
+      '???',
+      'background',
+      'none',
+      'clean',
+      'person',
+      'chair',
+      'dining table',
+    },
   });
 
   final String assetPath;
+  final String labelsAssetPath;
   final int inputWidth;
   final int inputHeight;
   final int inputChannels;
@@ -46,6 +61,8 @@ class TfliteObjectDetectionConfig {
   final int outputScoreIndex;
   final int outputCountIndex;
   final List<String> labels;
+  final Set<String> prohibitedLabels;
+  final Set<String> manualReviewLabels;
   final Set<String> allowedLabels;
 }
 
@@ -57,16 +74,21 @@ class TfliteObjectDetectionSource implements CameraObjectSource {
 
   final TfliteObjectDetectionConfig config;
   Interpreter? _interpreter;
+  List<String>? _labels;
 
   bool get isReady => _interpreter != null;
 
   Future<void> load() async {
     _interpreter ??= await Interpreter.fromAsset(config.assetPath);
+    _labels ??= config.labels.isNotEmpty
+        ? config.labels
+        : await _loadLabels(config.labelsAssetPath);
   }
 
   Future<void> dispose() async {
     _interpreter?.close();
     _interpreter = null;
+    _labels = null;
   }
 
   @override
@@ -80,10 +102,14 @@ class TfliteObjectDetectionSource implements CameraObjectSource {
       throw StateError('TFLite object model has not been loaded.');
     }
 
-    final input = _buildInput(image);
+    final input = _buildInput(image, interpreter);
     final boxShape = interpreter.getOutputTensor(config.outputBoxIndex).shape;
-    final classShape = interpreter.getOutputTensor(config.outputClassIndex).shape;
-    final scoreShape = interpreter.getOutputTensor(config.outputScoreIndex).shape;
+    final classShape = interpreter
+        .getOutputTensor(config.outputClassIndex)
+        .shape;
+    final scoreShape = interpreter
+        .getOutputTensor(config.outputScoreIndex)
+        .shape;
 
     final boxes = _zeros3d(boxShape);
     final classes = _zeros2d(classShape);
@@ -103,27 +129,44 @@ class TfliteObjectDetectionSource implements CameraObjectSource {
       rawClasses: classes.first,
       rawScores: scores.first,
       rawCount: counts.first,
-      labels: config.labels,
+      labels: _labels ?? config.labels,
       imageWidth: image.width,
       imageHeight: image.height,
       timestamp: timestamp,
       confidenceThreshold: config.confidenceThreshold,
       maximumObjects: config.maximumObjects,
       allowedLabels: config.allowedLabels,
+      prohibitedLabels: config.prohibitedLabels,
+      manualReviewLabels: config.manualReviewLabels,
     );
   }
 
-  Object _buildInput(CameraImage image) {
+  Future<List<String>> _loadLabels(String assetPath) async {
+    final raw = await rootBundle.loadString(assetPath);
+    return raw
+        .split(RegExp(r'\r?\n'))
+        .map((label) => label.trim())
+        .where((label) => label.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  Object _buildInput(CameraImage image, Interpreter interpreter) {
     final plane = image.planes.first;
     final width = image.width;
     final height = image.height;
+    final useUint8 = interpreter
+        .getInputTensor(0)
+        .type
+        .toString()
+        .toLowerCase()
+        .contains('uint8');
     final input = List.generate(
       1,
       (_) => List.generate(
         config.inputHeight,
         (_) => List.generate(
           config.inputWidth,
-          (_) => List<double>.filled(config.inputChannels, 0),
+          (_) => List<num>.filled(config.inputChannels, 0),
         ),
       ),
     );
@@ -139,13 +182,16 @@ class TfliteObjectDetectionSource implements CameraObjectSource {
           0,
           width - 1,
         );
-        final index = (rowOffset + srcX).clamp(0, plane.bytes.length - 1).toInt();
+        final index = (rowOffset + srcX)
+            .clamp(0, plane.bytes.length - 1)
+            .toInt();
         final unit = plane.bytes[index] / 255.0;
         final normalized =
-            config.inputMinimum + unit * (config.inputMaximum - config.inputMinimum);
+            config.inputMinimum +
+            unit * (config.inputMaximum - config.inputMinimum);
         final pixel = input[0][y][x];
         for (var c = 0; c < pixel.length; c++) {
-          pixel[c] = normalized;
+          pixel[c] = useUint8 ? normalized.round().clamp(0, 255) : normalized;
         }
       }
     }
@@ -195,6 +241,8 @@ class TfliteObjectOutputDecoder {
     required double confidenceThreshold,
     required int maximumObjects,
     required Set<String> allowedLabels,
+    Set<String> prohibitedLabels = const <String>{},
+    Set<String> manualReviewLabels = const <String>{},
   }) {
     final count = rawCount > 0
         ? rawCount.round().clamp(0, rawScores.length)
@@ -208,7 +256,13 @@ class TfliteObjectOutputDecoder {
       final classIndex = rawClasses[i].round();
       if (classIndex < 0 || classIndex >= labels.length) continue;
       final label = labels[classIndex].trim();
-      if (label.isEmpty || allowedLabels.contains(label.toLowerCase())) continue;
+      final normalizedLabel = label.toLowerCase();
+      if (label.isEmpty || allowedLabels.contains(normalizedLabel)) continue;
+      final isProhibited = prohibitedLabels.contains(normalizedLabel);
+      final isManualReview = manualReviewLabels.contains(normalizedLabel);
+      if (prohibitedLabels.isNotEmpty && !isProhibited && !isManualReview) {
+        continue;
+      }
       final box = rawBoxes[i];
       if (box.length < 4) continue;
 
@@ -234,6 +288,7 @@ class TfliteObjectOutputDecoder {
           metadata: <String, Object?>{
             'source': 'tflite_object_detection_source',
             'classIndex': classIndex,
+            'reviewPolicy': isProhibited ? 'prohibited' : 'manualReview',
           },
         ),
       );

@@ -15,24 +15,28 @@ Legacy Rust object model contract:
 - Output tensor: class probabilities aligned to `vision_manifest.json`
 - Labels: `background`, `phone`, `laptop`
 
-Production prohibited object detector path:
+Active prohibited object detector path:
 
 - `assets/ml_models/prohibited_object_detector.tflite`
 - `assets/ml_models/prohibited_object_labels.txt`
 - `assets/ml_models/prohibited_object_manifest.json`
 
-Expected TFLite object detector contract:
+Installed TFLite object detector contract:
 
-- Preferred model family: EfficientDet-Lite0 / SSD MobileNet style detector
-- Input tensor: `[1, 320, 320, 3]` float32, values normalized to `-1..1`
+- Model family: TensorFlow Hub EfficientDet-Lite0 COCO detector
+- Input tensor: `[1, 320, 320, 3]` uint8, values `0..255`
 - Output 0: detection boxes as `[1, N, 4]`, using `[ymin, xmin, ymax, xmax]`
 - Output 1: class indexes as `[1, N]`
 - Output 2: confidence scores as `[1, N]`
 - Output 3: detection count as `[1]`
 - Default threshold: `0.55`
 - Default maximum objects read: `8`
-- Initial policy labels: `cell phone`, `book`, `laptop`, `calculator`, `tablet`,
-  `earphones`, `headphones`, `paper notes`, `extra screen`
+- High-risk policy label: `cell phone`
+- Manual-review policy labels: `book`, `laptop`, `keyboard`, `mouse`, `remote`,
+  `tv`, `backpack`, `handbag`, `suitcase`, `bottle`, `cup`, `scissors`
+- Custom KSLAS training is still required for reliable `calculator`,
+  `paper notes`, `earphones`, `headphones`, `tablet`, and partially hidden object
+  detection because those are not direct COCO classes in the installed baseline.
 
 If `prohibited_object_detector.tflite` is missing or fails to load, the camera
 monitor falls back to the Rust scan source. This keeps the exam flow alive while
@@ -40,15 +44,11 @@ still preventing false green approval.
 
 Local activation steps:
 
-1. Add a real model file at:
-
-   `assets/ml_models/prohibited_object_detector.tflite`
-
-2. Confirm the model output contract:
+1. Confirm the model output contract:
 
    `python tool/validate_prohibited_object_model.py`
 
-3. Run Flutter checks:
+2. Run Flutter checks:
 
    `flutter analyze`
 
@@ -56,7 +56,7 @@ Local activation steps:
 
    `flutter test test/features/local_ai/object_ai/fallback_camera_object_source_test.dart`
 
-4. Calibrate using real exam-room images before strict enforcement.
+3. Calibrate using real exam-room images before strict enforcement.
 
 Minimum calibration targets before production enforcement:
 

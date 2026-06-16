@@ -115,4 +115,67 @@ void main() {
       await engine.dispose();
     },
   );
+
+  test(
+    'adapter should write manual-review object evidence without penalty',
+    () async {
+      final engine = LocalAiEngine();
+      final controller = ProctoringController();
+      final evidenceService = EvidenceCaptureService();
+      final adapter = LocalAiProctoringAdapter(
+        localAiEngine: engine,
+        proctoringController: controller,
+        evidenceCaptureService: evidenceService,
+      );
+
+      await controller.startSession(
+        level: AssessmentIntegrityLevel.highStakesExam,
+        studentId: 'KASU/CSC/001',
+      );
+      adapter.start();
+
+      await engine.ingest(
+        LocalAiEvent(
+          type: LocalAiEventType.prohibitedMaterialDetected,
+          severity: LocalAiSeverity.medium,
+          timestamp: DateTime.now(),
+          riskPoints: 0,
+          studentId: 'KASU/CSC/001',
+          sessionId: controller.activeSessionId.value,
+          message: 'Manual review required for visible exam material: book.',
+          metadata: const <String, Object?>{
+            'label': 'book',
+            'requiresHumanDecision': true,
+            'reviewPolicy': 'manualReview',
+          },
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      expect(controller.violationCount.value, 0);
+      expect(controller.integrityScore.value, 100);
+
+      final entries = IntegrityLedgerService.pendingLedgerEntries(
+        'KASU/CSC/001',
+      );
+      expect(entries, isNotEmpty);
+      expect(entries.first.penalty, 0);
+      expect(entries.first.eventType, 'prohibitedMaterialDetected');
+      expect(entries.first.evidencePath, startsWith('evidence://'));
+
+      final manifests = evidenceService.loadManifests('KASU/CSC/001');
+      expect(manifests, hasLength(1));
+      expect(
+        manifests.first.artifacts.any(
+          (artifact) => artifact.kind == 'cameraClip',
+        ),
+        isTrue,
+      );
+
+      await adapter.stop();
+      await controller.stopSession(silent: true);
+      await engine.dispose();
+    },
+  );
 }

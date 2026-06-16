@@ -36,21 +36,26 @@ void main() {
     expect(events.first.riskPoints, 30);
   });
 
-  test('ObjectDetectionDetector emits prohibited material for other labels', () async {
-    final detector = ObjectDetectionDetector();
+  test(
+    'ObjectDetectionDetector emits prohibited material for other labels',
+    () async {
+      final detector = ObjectDetectionDetector();
 
-    final events = await detector.analyze(
-      ObjectDetectionObservation(
-        timestamp: DateTime.now(),
-        label: 'book',
-        confidence: 0.75,
-      ),
-    );
+      final events = await detector.analyze(
+        ObjectDetectionObservation(
+          timestamp: DateTime.now(),
+          label: 'book',
+          confidence: 0.75,
+          metadata: const <String, Object?>{'reviewPolicy': 'manualReview'},
+        ),
+      );
 
-    expect(events, hasLength(1));
-    expect(events.first.type.name, 'prohibitedMaterialDetected');
-    expect(events.first.riskPoints, 25);
-  });
+      expect(events, hasLength(1));
+      expect(events.first.type.name, 'prohibitedMaterialDetected');
+      expect(events.first.riskPoints, 0);
+      expect(events.first.metadata['requiresHumanDecision'], true);
+    },
+  );
 
   test('ObjectDetectionDetector ignores policy-allowed labels', () async {
     final detector = ObjectDetectionDetector();

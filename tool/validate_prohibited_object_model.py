@@ -47,18 +47,22 @@ def main() -> int:
 
     manifest = json.loads(MANIFEST_PATH.read_text())
     expected_input = manifest.get("input", {}).get("shape")
+    expected_dtype = manifest.get("input", {}).get("dtype")
     expected_outputs = manifest.get("outputs", [])
 
     try:
         from tflite_runtime.interpreter import Interpreter  # type: ignore
     except Exception:
         try:
-            from tensorflow.lite.python.interpreter import Interpreter  # type: ignore
+            from ai_edge_litert.interpreter import Interpreter  # type: ignore
         except Exception:
-            return fail(
-                "Install tflite-runtime or tensorflow to inspect the model.\n"
-                "Example: pip install tflite-runtime"
-            )
+            try:
+                from tensorflow.lite.python.interpreter import Interpreter  # type: ignore
+            except Exception:
+                return fail(
+                    "Install tflite-runtime, ai-edge-litert, or tensorflow to inspect the model.\n"
+                    "Example: pip install ai-edge-litert"
+                )
 
     interpreter = Interpreter(model_path=str(MODEL_PATH))
     interpreter.allocate_tensors()
@@ -71,6 +75,10 @@ def main() -> int:
     actual_input = list(input_details[0]["shape"])
     if expected_input and actual_input != expected_input:
         return fail(f"Input shape mismatch. Expected {expected_input}, got {actual_input}")
+
+    actual_dtype = input_details[0]["dtype"].__name__
+    if expected_dtype and actual_dtype != expected_dtype:
+        return fail(f"Input dtype mismatch. Expected {expected_dtype}, got {actual_dtype}")
 
     if len(output_details) < 4:
         return fail(f"Model must expose at least 4 outputs. Found {len(output_details)}")

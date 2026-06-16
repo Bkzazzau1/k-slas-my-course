@@ -310,6 +310,7 @@ class EvidenceCaptureService {
   bool shouldCaptureEvidence(LocalAiEvent event) {
     return event.severity == LocalAiSeverity.high ||
         event.severity == LocalAiSeverity.critical ||
+        event.metadata['requiresHumanDecision'] == true ||
         event.shouldAlertInvigilator;
   }
 

@@ -36,7 +36,8 @@ class ObjectDetectionDetector
     if (input.isAllowedByPolicy) return const <LocalAiEvent>[];
 
     final normalized = input.label.trim().toLowerCase();
-    final isPhone = normalized.contains('phone') ||
+    final isPhone =
+        normalized.contains('phone') ||
         normalized.contains('mobile') ||
         normalized.contains('smartphone');
 
@@ -44,22 +45,29 @@ class ObjectDetectionDetector
         ? LocalAiEventType.phoneDetected
         : LocalAiEventType.prohibitedMaterialDetected;
 
-    final points = isPhone ? 30 : 25;
+    final reviewPolicy = input.metadata['reviewPolicy']?.toString();
+    final manualReview = reviewPolicy == 'manualReview';
+    final points = isPhone ? 30 : (manualReview ? 0 : 25);
 
     return <LocalAiEvent>[
       LocalAiEvent(
         type: eventType,
-        severity: LocalAiSeverity.high,
+        severity: isPhone || !manualReview
+            ? LocalAiSeverity.high
+            : LocalAiSeverity.medium,
         timestamp: input.timestamp,
         riskPoints: points,
         confidence: input.confidence,
         message: isPhone
             ? 'Phone detected in camera view.'
+            : manualReview
+            ? 'Manual review required for visible exam material: ${input.label}.'
             : 'Prohibited material detected: ${input.label}.',
         metadata: <String, Object?>{
           'label': input.label,
           'boundingBox': input.boundingBox,
           'isAllowedByPolicy': input.isAllowedByPolicy,
+          'requiresHumanDecision': manualReview,
           ...input.metadata,
         },
       ),

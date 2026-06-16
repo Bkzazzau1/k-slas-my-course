@@ -9,7 +9,8 @@ class LocalAiProctoringAdapter {
     required this.localAiEngine,
     required this.proctoringController,
     EvidenceCaptureService? evidenceCaptureService,
-  }) : evidenceCaptureService = evidenceCaptureService ?? EvidenceCaptureService();
+  }) : evidenceCaptureService =
+           evidenceCaptureService ?? EvidenceCaptureService();
 
   final LocalAiEngine localAiEngine;
   final ProctoringController proctoringController;
@@ -30,17 +31,25 @@ class LocalAiProctoringAdapter {
   }
 
   void _handleEvent(LocalAiEvent event) {
-    if (event.riskPoints <= 0) return;
+    final shouldWriteManualReview = _isManualReviewObjectEvent(event);
+    if (event.riskPoints <= 0 && !shouldWriteManualReview) return;
 
     final message = _messageFor(event);
-    proctoringController.registerViolation(
-      message,
-      penalty: event.riskPoints,
-      alert: event.shouldAlertInvigilator,
-      persistToLedger: false,
-    );
+    if (event.riskPoints > 0) {
+      proctoringController.registerViolation(
+        message,
+        penalty: event.riskPoints,
+        alert: event.shouldAlertInvigilator,
+        persistToLedger: false,
+      );
+    }
 
     unawaited(_captureEvidenceAndWriteEvent(event, message));
+  }
+
+  bool _isManualReviewObjectEvent(LocalAiEvent event) {
+    return event.type == LocalAiEventType.prohibitedMaterialDetected &&
+        event.metadata['requiresHumanDecision'] == true;
   }
 
   Future<void> _captureEvidenceAndWriteEvent(
@@ -51,8 +60,10 @@ class LocalAiProctoringAdapter {
     if (evidenceCaptureService.shouldCaptureEvidence(event)) {
       evidence = await evidenceCaptureService.capture(
         EvidenceCaptureRequest(
-          sessionId: event.sessionId ?? proctoringController.activeSessionId.value,
-          studentId: event.studentId ?? proctoringController.activeStudentId.value,
+          sessionId:
+              event.sessionId ?? proctoringController.activeSessionId.value,
+          studentId:
+              event.studentId ?? proctoringController.activeStudentId.value,
           event: event,
           reason: message,
           captureScreenshot: _shouldCaptureScreenshot(event),

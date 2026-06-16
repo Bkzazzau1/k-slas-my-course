@@ -1,13 +1,13 @@
 {
-  "modelName": "KSLAS Prohibited Object Detector",
+  "modelName": "KSLAS Prohibited Object Detector - EfficientDet Lite0 COCO",
   "modelFile": "assets/ml_models/prohibited_object_detector.tflite",
   "labelsFile": "assets/ml_models/prohibited_object_labels.txt",
-  "modelFamily": "EfficientDet-Lite0 or SSD MobileNet style detector",
-  "status": "pending_model_file",
+  "modelFamily": "EfficientDet-Lite0 COCO object detector",
+  "status": "active_coco_baseline",
   "input": {
     "shape": [1, 320, 320, 3],
-    "dtype": "float32",
-    "normalization": "-1..1"
+    "dtype": "uint8",
+    "normalization": "0..255"
   },
   "outputs": [
     {
@@ -41,7 +41,8 @@
     "autoPunishment": false,
     "phoneHighRisk": true,
     "bookPaperManualReview": true,
-    "humanDecisionRequired": true
+    "humanDecisionRequired": true,
+    "note": "The installed baseline is COCO-trained. Phone is high risk; books, bags, laptop/keyboard/mouse/remote/tv and similar visible materials are routed to manual review with evidence. A custom KSLAS dataset is still required for calculator, paper-note, and earphone accuracy."
   },
   "fallback": {
     "enabled": true,
