@@ -7,6 +7,7 @@ import '../core/local_ai_event.dart';
 import 'camera_face_source.dart';
 import 'camera_frame_sampler.dart';
 import 'face_presence_detector.dart';
+import 'frame_heuristic_face_source.dart';
 
 class LocalAiCameraMonitor {
   LocalAiCameraMonitor({
@@ -15,9 +16,9 @@ class LocalAiCameraMonitor {
     CameraFaceSource? faceSource,
     FacePresenceDetector? faceDetector,
     CameraFrameSampler? sampler,
-  })  : faceSource = faceSource ?? const PlaceholderCameraFaceSource(),
-        faceDetector = faceDetector ?? FacePresenceDetector(),
-        sampler = sampler ?? CameraFrameSampler();
+  }) : faceSource = faceSource ?? const FrameHeuristicFaceSource(),
+       faceDetector = faceDetector ?? FacePresenceDetector(),
+       sampler = sampler ?? CameraFrameSampler();
 
   final CameraController cameraController;
   final LocalAiEngine localAiEngine;
