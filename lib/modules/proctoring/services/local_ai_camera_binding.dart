@@ -8,10 +8,12 @@ class LocalAiCameraBinding {
   LocalAiCameraBinding({
     required this.proctoringController,
     this.faceSource,
+    this.evidenceArtifactCaptureHook,
   });
 
   final ProctoringController proctoringController;
   final CameraFaceSource? faceSource;
+  final EvidenceArtifactCaptureHook? evidenceArtifactCaptureHook;
 
   LocalAiEngine? _engine;
   LocalAiCameraMonitor? _monitor;
@@ -27,6 +29,12 @@ class LocalAiCameraBinding {
     final adapter = LocalAiProctoringAdapter(
       localAiEngine: engine,
       proctoringController: proctoringController,
+      evidenceCaptureService: EvidenceCaptureService(
+        artifactCaptureHook: CameraEvidenceCaptureHook(
+          cameraController: controller,
+          fallbackHook: evidenceArtifactCaptureHook,
+        ),
+      ),
     );
     final monitor = LocalAiCameraMonitor(
       cameraController: controller,
