@@ -16,6 +16,7 @@ export 'core/local_ai_detector.dart';
 export 'core/local_ai_engine.dart';
 export 'core/local_ai_event.dart';
 export 'core/local_ai_score_engine.dart';
+export 'evidence/camera_evidence_capture_hook.dart';
 export 'evidence/evidence_capture_service.dart';
 export 'object_ai/object_detection_detector.dart';
 export 'risk/risk_level.dart';
