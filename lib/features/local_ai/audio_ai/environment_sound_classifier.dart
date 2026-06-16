@@ -61,7 +61,7 @@ class EnvironmentSoundClassification {
   LocalAiEvent toEvent({String? sessionId, String? studentId}) {
     return LocalAiEvent(
       type: riskPoints > 0
-          ? LocalAiEventType.environmentSoundClassified
+          ? LocalAiEventType.backgroundNoiseDetected
           : LocalAiEventType.audioBaselineCaptured,
       severity: _severity,
       timestamp: DateTime.now(),
