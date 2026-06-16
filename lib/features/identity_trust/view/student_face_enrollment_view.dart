@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../services/camera_face_enrollment_sampler.dart';
+import '../services/demo_identity_trust_repository.dart';
 import '../services/face_embedding_connector.dart';
 import '../services/identity_trust_repository.dart';
 import '../services/static_face_embedding_connector.dart';
@@ -35,8 +36,11 @@ class _StudentFaceEnrollmentViewState extends State<StudentFaceEnrollmentView> {
             embedding: const <double>[1, 0, 0],
             version: 'demo-static-face-v1',
           );
+    final repository = Get.isRegistered<IdentityTrustRepository>()
+        ? Get.find<IdentityTrustRepository>()
+        : DemoIdentityTrustRepository();
     controller = StudentFaceEnrollmentController(
-      repository: Get.find<IdentityTrustRepository>(),
+      repository: repository,
       connector: connector,
     );
     _load();
