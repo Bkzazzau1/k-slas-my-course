@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 
+import '../../../data/services/live_session_runtime_mode_service.dart';
 import 'face_embedding_connector.dart';
 import 'face_embedding_connector_selector.dart';
 import 'identity_trust_repository.dart';
@@ -10,17 +11,21 @@ class IdentityTrustBootstrap {
 
   static void register({
     FaceEmbeddingRuntimeTarget connectorTarget = FaceEmbeddingRuntimeTarget.demo,
+    LiveSessionRuntimeMode? runtimeMode,
   }) {
     if (!Get.isRegistered<IdentityTrustRepository>()) {
       Get.put<IdentityTrustRepository>(
-        const IdentityTrustRepositorySelector().select(),
+        IdentityTrustRepositorySelector(runtimeMode: runtimeMode).select(),
         permanent: true,
       );
     }
 
     if (!Get.isRegistered<FaceEmbeddingConnector>()) {
       Get.put<FaceEmbeddingConnector>(
-        FaceEmbeddingConnectorSelector(target: connectorTarget).select(),
+        FaceEmbeddingConnectorSelector(
+          target: connectorTarget,
+          runtimeMode: runtimeMode,
+        ).select(),
         permanent: true,
       );
     }
