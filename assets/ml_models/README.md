@@ -21,9 +21,11 @@ Face detector model path:
 
 Expected face detector contract:
 
-- Input tensor: `[1, 128, 128, 1]` float32, values normalized to `0..1`
-- Output 0: boxes as `[1, N, 4]`, ordered `[ymin, xmin, ymax, xmax]`, normalized `0..1`
-- Output 1: confidence scores as `[1, N]`
+- Input tensor: `[1, 128, 128, 3]` float32, values normalized to `-1..1`
+- Output 0: MediaPipe/BlazeFace raw box regressors as `[1, 896, 16]`
+- Output 1: MediaPipe/BlazeFace raw confidence logits as `[1, 896, 1]`
+- Decoder: anchors are generated with front-camera strides `[8, 16, 16, 16]`,
+  scores use sigmoid activation, and overlapping boxes are pruned with NMS.
 - Default threshold: `0.55`
 - Default maximum faces read: `4`
 

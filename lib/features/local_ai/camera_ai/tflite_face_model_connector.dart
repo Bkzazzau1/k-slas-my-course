@@ -10,12 +10,14 @@ class TfliteFaceModelConfig {
     this.assetPath = 'assets/ml_models/face_detector.tflite',
     this.inputWidth = 128,
     this.inputHeight = 128,
-    this.inputChannels = 1,
+    this.inputChannels = 3,
     this.confidenceThreshold = 0.55,
     this.maximumFaces = 4,
     this.outputBoxIndex = 0,
     this.outputScoreIndex = 1,
     this.outputCountIndex,
+    this.inputMinimum = -1.0,
+    this.inputMaximum = 1.0,
   });
 
   final String assetPath;
@@ -27,6 +29,8 @@ class TfliteFaceModelConfig {
   final int outputBoxIndex;
   final int outputScoreIndex;
   final int? outputCountIndex;
+  final double inputMinimum;
+  final double inputMaximum;
 }
 
 class TfliteFaceModelConnector implements FaceModelConnector {
@@ -58,15 +62,12 @@ class TfliteFaceModelConnector implements FaceModelConnector {
 
     final startedAt = DateTime.now();
     final input = _buildInput(image);
-    final boxes = List.generate(
-      1,
-      (_) =>
-          List.generate(config.maximumFaces, (_) => List<double>.filled(4, 0)),
-    );
-    final scores = List.generate(
-      1,
-      (_) => List<double>.filled(config.maximumFaces, 0),
-    );
+    final boxShape = interpreter.getOutputTensor(config.outputBoxIndex).shape;
+    final scoreShape = interpreter
+        .getOutputTensor(config.outputScoreIndex)
+        .shape;
+    final boxes = _zeros3d(boxShape);
+    final scores = _zeros3d(scoreShape);
     final outputs = <int, Object>{
       config.outputBoxIndex: boxes,
       config.outputScoreIndex: scores,
@@ -76,11 +77,13 @@ class TfliteFaceModelConnector implements FaceModelConnector {
 
     interpreter.runForMultipleInputs(<Object>[input], outputs);
 
-    final faces = FaceModelOutputDecoder.decode(
-      boxes: boxes.first,
-      scores: scores.first,
+    final faces = MediaPipeFaceOutputDecoder.decode(
+      rawBoxes: boxes.first,
+      rawScores: scores.first,
       imageWidth: image.width,
       imageHeight: image.height,
+      inputWidth: config.inputWidth,
+      inputHeight: config.inputHeight,
       confidenceThreshold: config.confidenceThreshold,
       maximumFaces: config.maximumFaces,
     );
@@ -130,7 +133,10 @@ class TfliteFaceModelConnector implements FaceModelConnector {
         final index = (rowOffset + srcX)
             .clamp(0, plane.bytes.length - 1)
             .toInt();
-        final normalized = plane.bytes[index] / 255.0;
+        final unit = plane.bytes[index] / 255.0;
+        final normalized =
+            config.inputMinimum +
+            unit * (config.inputMaximum - config.inputMinimum);
         final pixel = input[0][y][x];
         for (var c = 0; c < pixel.length; c++) {
           pixel[c] = normalized;
@@ -140,6 +146,162 @@ class TfliteFaceModelConnector implements FaceModelConnector {
 
     return input;
   }
+
+  List<List<List<double>>> _zeros3d(List<int> shape) {
+    if (shape.length == 3) {
+      return List.generate(
+        shape[0],
+        (_) => List.generate(shape[1], (_) => List<double>.filled(shape[2], 0)),
+      );
+    }
+    if (shape.length == 2) {
+      return List.generate(
+        1,
+        (_) => List.generate(shape[0], (_) => List<double>.filled(shape[1], 0)),
+      );
+    }
+    throw StateError('Unsupported face model output tensor shape: $shape');
+  }
+}
+
+class MediaPipeFaceOutputDecoder {
+  const MediaPipeFaceOutputDecoder._();
+
+  static const double _rawScoreLimit = 80;
+  static const double _nmsThreshold = 0.30;
+
+  static List<FaceDetectionBox> decode({
+    required List<List<double>> rawBoxes,
+    required List<List<double>> rawScores,
+    required int imageWidth,
+    required int imageHeight,
+    required int inputWidth,
+    required int inputHeight,
+    required double confidenceThreshold,
+    required int maximumFaces,
+  }) {
+    final anchors = _generateAnchors(
+      inputWidth: inputWidth,
+      inputHeight: inputHeight,
+    );
+    final count = math.min(
+      math.min(rawBoxes.length, rawScores.length),
+      anchors.length,
+    );
+    final candidates = <FaceDetectionBox>[];
+
+    for (var i = 0; i < count; i++) {
+      final rawScore = rawScores[i].isEmpty ? 0.0 : rawScores[i].first;
+      final score = _sigmoid(rawScore.clamp(-_rawScoreLimit, _rawScoreLimit));
+      if (score < confidenceThreshold) continue;
+
+      final box = rawBoxes[i];
+      if (box.length < 4) continue;
+
+      final anchor = anchors[i];
+      final xCenter = (box[0] / inputWidth) + anchor.x;
+      final yCenter = (box[1] / inputHeight) + anchor.y;
+      final width = box[2] / inputWidth;
+      final height = box[3] / inputHeight;
+
+      final left = (xCenter - width / 2).clamp(0.0, 1.0);
+      final top = (yCenter - height / 2).clamp(0.0, 1.0);
+      final right = (xCenter + width / 2).clamp(0.0, 1.0);
+      final bottom = (yCenter + height / 2).clamp(0.0, 1.0);
+      final pixelWidth = (right - left) * imageWidth;
+      final pixelHeight = (bottom - top) * imageHeight;
+      if (pixelWidth <= 1 || pixelHeight <= 1) continue;
+
+      candidates.add(
+        FaceDetectionBox(
+          left: left * imageWidth,
+          top: top * imageHeight,
+          width: pixelWidth,
+          height: pixelHeight,
+          confidence: score,
+        ),
+      );
+    }
+
+    candidates.sort((a, b) => (b.confidence ?? 0).compareTo(a.confidence ?? 0));
+    return _nonMaxSuppression(candidates).take(maximumFaces).toList();
+  }
+
+  static List<_Anchor> _generateAnchors({
+    required int inputWidth,
+    required int inputHeight,
+  }) {
+    const strides = <int>[8, 16, 16, 16];
+    const anchorOffsetX = 0.5;
+    const anchorOffsetY = 0.5;
+    final anchors = <_Anchor>[];
+    var layerId = 0;
+
+    while (layerId < strides.length) {
+      var lastSameStrideLayer = layerId;
+      var repeats = 0;
+      while (lastSameStrideLayer < strides.length &&
+          strides[lastSameStrideLayer] == strides[layerId]) {
+        lastSameStrideLayer += 1;
+        repeats += 2;
+      }
+
+      final stride = strides[layerId];
+      final featureMapHeight = inputHeight ~/ stride;
+      final featureMapWidth = inputWidth ~/ stride;
+      for (var y = 0; y < featureMapHeight; y++) {
+        final yCenter = (y + anchorOffsetY) / featureMapHeight;
+        for (var x = 0; x < featureMapWidth; x++) {
+          final xCenter = (x + anchorOffsetX) / featureMapWidth;
+          for (var i = 0; i < repeats; i++) {
+            anchors.add(_Anchor(xCenter, yCenter));
+          }
+        }
+      }
+
+      layerId = lastSameStrideLayer;
+    }
+
+    return anchors;
+  }
+
+  static double _sigmoid(num value) {
+    return 1 / (1 + math.exp(-value));
+  }
+
+  static List<FaceDetectionBox> _nonMaxSuppression(
+    List<FaceDetectionBox> candidates,
+  ) {
+    final selected = <FaceDetectionBox>[];
+    for (final candidate in candidates) {
+      final overlaps = selected.any(
+        (existing) =>
+            _intersectionOverUnion(candidate, existing) > _nmsThreshold,
+      );
+      if (!overlaps) selected.add(candidate);
+    }
+    return selected;
+  }
+
+  static double _intersectionOverUnion(FaceDetectionBox a, FaceDetectionBox b) {
+    final left = math.max(a.left, b.left);
+    final top = math.max(a.top, b.top);
+    final right = math.min(a.left + a.width, b.left + b.width);
+    final bottom = math.min(a.top + a.height, b.top + b.height);
+    final intersection =
+        math.max(0.0, right - left) * math.max(0.0, bottom - top);
+    if (intersection <= 0) return 0;
+    final union = a.width * a.height + b.width * b.height - intersection;
+    if (union <= 0) return 0;
+    return intersection / union;
+  }
+}
+
+class _Anchor {
+  const _Anchor(this.x, this.y);
+
+  final double x;
+  final double y;
 }
 
 class FaceModelOutputDecoder {

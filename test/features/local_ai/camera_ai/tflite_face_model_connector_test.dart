@@ -1,7 +1,27 @@
+import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_courses/features/local_ai/camera_ai/tflite_face_model_connector.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  test('TfliteFaceModelConnector should load bundled face detector', () async {
+    final connector = TfliteFaceModelConnector();
+
+    await connector.load();
+    final output = await connector.detectFaces(_fakeImage());
+    await connector.dispose();
+
+    expect(output.imageWidth, 128);
+    expect(output.imageHeight, 128);
+    expect(output.faces.length, lessThanOrEqualTo(4));
+  });
+
   test('FaceModelOutputDecoder should keep boxes above threshold', () {
     final faces = FaceModelOutputDecoder.decode(
       boxes: const <List<double>>[
@@ -55,5 +75,27 @@ void main() {
     );
 
     expect(faces, isEmpty);
+  });
+}
+
+CameraImage _fakeImage() {
+  debugDefaultTargetPlatformOverride = TargetPlatform.android;
+  // ignore: deprecated_member_use
+  return CameraImage.fromPlatformData(<dynamic, dynamic>{
+    'format': 35,
+    'height': 128,
+    'width': 128,
+    'lensAperture': 0.0,
+    'sensorExposureTime': 0,
+    'sensorSensitivity': 0.0,
+    'planes': <dynamic>[
+      <dynamic, dynamic>{
+        'bytes': Uint8List.fromList(List<int>.filled(128 * 128, 128)),
+        'bytesPerRow': 128,
+        'bytesPerPixel': 1,
+        'height': 128,
+        'width': 128,
+      },
+    ],
   });
 }
