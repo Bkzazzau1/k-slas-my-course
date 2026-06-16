@@ -21,7 +21,7 @@ void main() {
   });
 
   test(
-    'Should increment violation count and escalate strike logic to termination',
+    'Should increment violation count and terminate on strict strike limit',
     () {
       controller.handleViolation('multiple people');
       expect(controller.strictViolationStrikes.value, 1);
@@ -32,14 +32,10 @@ void main() {
       controller.armExamMonitoring();
       controller.handleViolation('background speech');
       expect(controller.strictViolationStrikes.value, 2);
-      expect(controller.sessionTerminated.value, false);
-
-      controller.handleViolation('gaze diversion');
-      expect(controller.strictViolationStrikes.value, 3);
       expect(controller.sessionTerminated.value, true);
       expect(
         controller.terminationReason.value,
-        contains('Maximum violations reached'),
+        contains('Repeated strict violation'),
       );
     },
   );
@@ -89,7 +85,7 @@ void main() {
       expect(controller.violationCount.value, 1);
       expect(
         controller.violationLog.join(' '),
-        contains('background during high-stakes exam'),
+        contains('App moved away from protected session'),
       );
     },
   );
