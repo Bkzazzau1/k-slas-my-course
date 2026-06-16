@@ -1,5 +1,6 @@
 import '../../../data/services/student_profile_storage.dart';
 import '../models/student_face_profile.dart';
+import 'camera_face_enrollment_sampler.dart';
 import 'face_embedding_connector.dart';
 import 'face_enrollment_service.dart';
 import 'identity_trust_repository.dart';
@@ -13,6 +14,7 @@ class StudentFaceEnrollmentSnapshot {
     required this.isComplete,
     required this.statusText,
     this.profile,
+    this.lastQualityScore,
   });
 
   final String studentId;
@@ -21,6 +23,7 @@ class StudentFaceEnrollmentSnapshot {
   final bool isComplete;
   final String statusText;
   final StudentFaceProfile? profile;
+  final double? lastQualityScore;
 }
 
 class StudentFaceEnrollmentController {
@@ -45,6 +48,8 @@ class StudentFaceEnrollmentController {
 
   StudentFaceProfile? _profile;
   String _statusText = 'Ready to start face enrollment.';
+  double? _lastQualityScore;
+  String? _lastModelVersion;
 
   StudentFaceEnrollmentSnapshot get snapshot => StudentFaceEnrollmentSnapshot(
         studentId: _studentId,
@@ -53,6 +58,7 @@ class StudentFaceEnrollmentController {
         isComplete: _profile?.isActive ?? false,
         statusText: _statusText,
         profile: _profile,
+        lastQualityScore: _lastQualityScore,
       );
 
   Future<StudentFaceEnrollmentSnapshot> load() async {
@@ -80,15 +86,64 @@ class StudentFaceEnrollmentController {
       await _connector.load();
     }
 
-    _samples.add(const <double>[1, 0, 0]);
+    _lastModelVersion = _connector.modelVersion;
+    _lastQualityScore = 1.0;
+    return _addEmbeddingSample(
+      studentId: studentId,
+      embedding: const <double>[1, 0, 0],
+      modelVersion: _connector.modelVersion,
+      qualityScore: 1.0,
+    );
+  }
+
+  Future<StudentFaceEnrollmentSnapshot> addCameraSample(
+    CameraFaceEnrollmentSampler sampler,
+  ) async {
+    final studentId = _studentId;
+    if (studentId.isEmpty) {
+      _statusText = 'Student profile is missing. Please login again.';
+      return snapshot;
+    }
+
+    try {
+      final sample = await sampler.captureSample(studentId: studentId);
+      _lastModelVersion = sample.modelVersion;
+      _lastQualityScore = sample.qualityScore;
+      return _addEmbeddingSample(
+        studentId: studentId,
+        embedding: sample.embedding,
+        modelVersion: sample.modelVersion,
+        qualityScore: sample.qualityScore,
+      );
+    } catch (e) {
+      _statusText = 'Face sample could not be captured: $e';
+      return snapshot;
+    }
+  }
+
+  Future<StudentFaceEnrollmentSnapshot> _addEmbeddingSample({
+    required String studentId,
+    required List<double> embedding,
+    required String modelVersion,
+    double? qualityScore,
+  }) async {
+    if (embedding.isEmpty) {
+      _statusText = 'Face sample rejected because the embedding was empty.';
+      return snapshot;
+    }
+
+    _samples.add(embedding);
     _statusText = 'Sample ${_samples.length} of $requiredSamples captured.';
+    if (qualityScore != null) {
+      _statusText = 'Sample ${_samples.length} of $requiredSamples captured. Quality ${(qualityScore * 100).round()}%.';
+    }
 
     if (_samples.length >= requiredSamples) {
       final profile = _enrollmentService.enroll(
         FaceEnrollmentInput(
           studentId: studentId,
           embeddings: List<List<double>>.from(_samples),
-          modelVersion: _connector.modelVersion,
+          modelVersion: _lastModelVersion ?? modelVersion,
         ),
       );
       await _repository.saveFaceProfile(profile);
@@ -102,6 +157,8 @@ class StudentFaceEnrollmentController {
   void reset() {
     _samples.clear();
     _profile = null;
+    _lastQualityScore = null;
+    _lastModelVersion = null;
     _statusText = 'Ready to start face enrollment.';
   }
 
