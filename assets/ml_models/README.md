@@ -18,6 +18,8 @@ Legacy Rust object model contract:
 Production prohibited object detector path:
 
 - `assets/ml_models/prohibited_object_detector.tflite`
+- `assets/ml_models/prohibited_object_labels.txt`
+- `assets/ml_models/prohibited_object_manifest.json`
 
 Expected TFLite object detector contract:
 
@@ -35,6 +37,33 @@ Expected TFLite object detector contract:
 If `prohibited_object_detector.tflite` is missing or fails to load, the camera
 monitor falls back to the Rust scan source. This keeps the exam flow alive while
 still preventing false green approval.
+
+Local activation steps:
+
+1. Add a real model file at:
+
+   `assets/ml_models/prohibited_object_detector.tflite`
+
+2. Confirm the model output contract:
+
+   `python tool/validate_prohibited_object_model.py`
+
+3. Run Flutter checks:
+
+   `flutter analyze`
+
+   `flutter test test/features/local_ai/object_ai/tflite_object_detection_source_test.dart`
+
+   `flutter test test/features/local_ai/object_ai/fallback_camera_object_source_test.dart`
+
+4. Calibrate using real exam-room images before strict enforcement.
+
+Minimum calibration targets before production enforcement:
+
+- Clean desk false positive rate should be low enough for invigilator review.
+- Phone detection should be reliable under typical webcam lighting.
+- Book/paper/notes should trigger manual review, not automatic punishment.
+- Every high-risk object event must have camera-frame evidence attached.
 
 Face detector model path:
 
