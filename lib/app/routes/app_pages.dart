@@ -4,6 +4,7 @@ import 'package:my_courses/modules/fill_blank/view/fill_blank_view.dart';
 import 'package:my_courses/modules/assignments/binding/assignments_binding.dart';
 import 'package:my_courses/modules/assignments/view/assignments_pro_view.dart';
 
+import '../../features/identity_trust/services/identity_trust_bootstrap.dart';
 import '../../features/identity_trust/view/student_face_enrollment_view.dart';
 import '../../modules/cbt/binding/cbt_binding.dart';
 import '../../modules/cbt/view/cbt_result_view.dart';
@@ -122,6 +123,9 @@ class AppPages {
     GetPage(
       name: Routes.faceEnrollment,
       page: () => const StudentFaceEnrollmentView(),
+      binding: BindingsBuilder(() {
+        IdentityTrustBootstrap.register();
+      }),
     ),
     GetPage(
       name: Routes.chat,
