@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../../../data/services/integrity_event_writer.dart';
 import '../../../features/local_ai/local_ai.dart';
 import '../controller/proctoring_controller.dart';
 
@@ -35,6 +36,33 @@ class LocalAiProctoringAdapter {
       penalty: event.riskPoints,
       alert: event.shouldAlertInvigilator,
     );
+
+    unawaited(_writeEvent(event, message));
+  }
+
+  Future<void> _writeEvent(LocalAiEvent event, String message) async {
+    final profile = await IntegrityEventWriter.write(
+      studentId: event.studentId,
+      sessionId: event.sessionId ?? proctoringController.activeSessionId.value,
+      reason: message,
+      points: event.riskPoints,
+      level: proctoringController.currentLevel.value?.name,
+      scoreAfter: proctoringController.integrityScore.value,
+      strikesAfter: proctoringController.strictViolationStrikes.value,
+      tier: proctoringController.riskTier.value,
+      riskAfter: proctoringController.cumulativeRiskScore.value,
+      type: event.type.name,
+      severity: event.severity.name,
+      confidence: event.confidence,
+      alert: event.shouldAlertInvigilator,
+      filePath: event.evidencePath,
+      data: <String, Object?>{
+        'source': 'local_ai',
+        'rawEvent': event.toJson(),
+      },
+    );
+    proctoringController.pendingLedgerSyncCount.value =
+        profile.unsyncedLedgerCount;
   }
 
   String _messageFor(LocalAiEvent event) {
@@ -50,7 +78,7 @@ class LocalAiProctoringAdapter {
       case LocalAiEventType.phoneDetected:
         return 'Phone detected in camera view.';
       case LocalAiEventType.humanVoiceDetected:
-        return 'Human voice detected during the exam.';
+        return 'Human voice detected during the session.';
       case LocalAiEventType.voiceSourceEstimated:
         return 'External voice source suspected.';
       case LocalAiEventType.tabSwitchDetected:
@@ -60,13 +88,12 @@ class LocalAiProctoringAdapter {
       case LocalAiEventType.copyPasteDetected:
         return 'Copy or paste activity detected.';
       case LocalAiEventType.remoteDesktopDetected:
-        return 'Remote desktop activity detected.';
       case LocalAiEventType.screenSharingDetected:
-        return 'Screen sharing activity detected.';
+        return 'External screen-control activity detected.';
       case LocalAiEventType.multipleMonitorDetected:
-        return 'Multiple monitor activity detected.';
+        return 'Multiple display activity detected.';
       default:
-        return 'Local AI proctoring event detected: ${event.type.name}.';
+        return 'Local integrity event detected: ${event.type.name}.';
     }
   }
 }
