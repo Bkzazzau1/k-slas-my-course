@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../app/routes/app_routes.dart';
 import '../../../core/widgets/luxury_scaffold.dart';
 import '../../../data/services/student_auth_service.dart';
 import '../controller/settings_controller.dart';
@@ -120,7 +121,7 @@ class SettingsView extends GetView<SettingsController> {
             _Tile(
               title: 'Face enrollment',
               value: 'Register / update',
-              onTap: () => Get.toNamed('/identity/face-enrollment'),
+              onTap: () => Get.toNamed(Routes.faceEnrollment),
             ),
             _Tile(
               title: 'Student backend login',
