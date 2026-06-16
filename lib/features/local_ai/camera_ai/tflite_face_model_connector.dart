@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -61,10 +60,8 @@ class TfliteFaceModelConnector implements FaceModelConnector {
     final input = _buildInput(image);
     final boxes = List.generate(
       1,
-      (_) => List.generate(
-        config.maximumFaces,
-        (_) => List<double>.filled(4, 0),
-      ),
+      (_) =>
+          List.generate(config.maximumFaces, (_) => List<double>.filled(4, 0)),
     );
     final scores = List.generate(
       1,
@@ -120,15 +117,19 @@ class TfliteFaceModelConnector implements FaceModelConnector {
     );
 
     for (var y = 0; y < config.inputHeight; y++) {
-      final srcY = ((y + 0.5) * height / config.inputHeight)
-          .floor()
-          .clamp(0, height - 1);
+      final srcY = ((y + 0.5) * height / config.inputHeight).floor().clamp(
+        0,
+        height - 1,
+      );
       final rowOffset = srcY * plane.bytesPerRow;
       for (var x = 0; x < config.inputWidth; x++) {
-        final srcX = ((x + 0.5) * width / config.inputWidth)
-            .floor()
-            .clamp(0, width - 1);
-        final index = (rowOffset + srcX).clamp(0, plane.bytes.length - 1).toInt();
+        final srcX = ((x + 0.5) * width / config.inputWidth).floor().clamp(
+          0,
+          width - 1,
+        );
+        final index = (rowOffset + srcX)
+            .clamp(0, plane.bytes.length - 1)
+            .toInt();
         final normalized = plane.bytes[index] / 255.0;
         final pixel = input[0][y][x];
         for (var c = 0; c < pixel.length; c++) {

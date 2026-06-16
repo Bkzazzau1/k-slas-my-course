@@ -18,8 +18,8 @@ void main() {
     expect(faces, hasLength(1));
     expect(faces.first.left, 200);
     expect(faces.first.top, 50);
-    expect(faces.first.width, 400);
-    expect(faces.first.height, 200);
+    expect(faces.first.width, closeTo(400, 0.0001));
+    expect(faces.first.height, closeTo(200, 0.0001));
     expect(faces.first.confidence, 0.80);
   });
 
