@@ -31,6 +31,7 @@ class StudentFaceEnrollmentController {
     required IdentityTrustRepository repository,
     FaceEnrollmentService? enrollmentService,
     FaceEmbeddingConnector? connector,
+    String? studentId,
     this.requiredSamples = 3,
   })  : _repository = repository,
         _enrollmentService = enrollmentService ?? FaceEnrollmentService(),
@@ -38,11 +39,13 @@ class StudentFaceEnrollmentController {
             StaticFaceEmbeddingConnector(
               embedding: const <double>[1, 0, 0],
               version: 'demo-static-face-v1',
-            );
+            ),
+        _studentIdOverride = studentId;
 
   final IdentityTrustRepository _repository;
   final FaceEnrollmentService _enrollmentService;
   final FaceEmbeddingConnector _connector;
+  final String? _studentIdOverride;
   final int requiredSamples;
   final List<List<double>> _samples = <List<double>>[];
 
@@ -163,6 +166,9 @@ class StudentFaceEnrollmentController {
   }
 
   String get _studentId {
+    final override = _studentIdOverride?.trim() ?? '';
+    if (override.isNotEmpty) return override;
+
     final profile = StudentProfileStorage.load();
     final matricNo = profile?.matricNo?.trim() ?? '';
     if (matricNo.isNotEmpty) return matricNo;
