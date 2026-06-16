@@ -8,10 +8,12 @@ class LocalAiProctoringAdapter {
   LocalAiProctoringAdapter({
     required this.localAiEngine,
     required this.proctoringController,
-  });
+    EvidenceCaptureService? evidenceCaptureService,
+  }) : evidenceCaptureService = evidenceCaptureService ?? EvidenceCaptureService();
 
   final LocalAiEngine localAiEngine;
   final ProctoringController proctoringController;
+  final EvidenceCaptureService evidenceCaptureService;
 
   StreamSubscription<LocalAiEvent>? _subscription;
 
@@ -38,10 +40,37 @@ class LocalAiProctoringAdapter {
       persistToLedger: false,
     );
 
-    unawaited(_writeEvent(event, message));
+    unawaited(_captureEvidenceAndWriteEvent(event, message));
   }
 
-  Future<void> _writeEvent(LocalAiEvent event, String message) async {
+  Future<void> _captureEvidenceAndWriteEvent(
+    LocalAiEvent event,
+    String message,
+  ) async {
+    EvidenceCaptureResult? evidence;
+    if (evidenceCaptureService.shouldCaptureEvidence(event)) {
+      evidence = await evidenceCaptureService.capture(
+        EvidenceCaptureRequest(
+          sessionId: event.sessionId ?? proctoringController.activeSessionId.value,
+          studentId: event.studentId ?? proctoringController.activeStudentId.value,
+          event: event,
+          reason: message,
+          captureScreenshot: _shouldCaptureScreenshot(event),
+          captureAudioClip: _shouldCaptureAudio(event),
+          captureCameraClip: _shouldCaptureCamera(event),
+        ),
+      );
+      await localAiEngine.ingest(evidence.toEvidenceEvent());
+    }
+
+    await _writeEvent(event, message, evidence: evidence);
+  }
+
+  Future<void> _writeEvent(
+    LocalAiEvent event,
+    String message, {
+    EvidenceCaptureResult? evidence,
+  }) async {
     final profile = await IntegrityEventWriter.write(
       studentId: event.studentId ?? proctoringController.activeStudentId.value,
       sessionId: event.sessionId ?? proctoringController.activeSessionId.value,
@@ -56,11 +85,55 @@ class LocalAiProctoringAdapter {
       severity: event.severity.name,
       confidence: event.confidence,
       alert: event.shouldAlertInvigilator,
-      filePath: event.evidencePath,
-      data: <String, Object?>{'source': 'local_ai', 'rawEvent': event.toJson()},
+      filePath: evidence?.manifestPath ?? event.evidencePath,
+      data: <String, Object?>{
+        'source': 'local_ai',
+        'rawEvent': event.toJson(),
+        if (evidence != null) 'evidence': evidence.toJson(),
+      },
     );
     proctoringController.pendingLedgerSyncCount.value =
         profile.unsyncedLedgerCount;
+  }
+
+  bool _shouldCaptureScreenshot(LocalAiEvent event) {
+    switch (event.type) {
+      case LocalAiEventType.tabSwitchDetected:
+      case LocalAiEventType.appSwitchDetected:
+      case LocalAiEventType.copyPasteDetected:
+      case LocalAiEventType.remoteDesktopDetected:
+      case LocalAiEventType.screenSharingDetected:
+      case LocalAiEventType.multipleMonitorDetected:
+      case LocalAiEventType.suspiciousPatternDetected:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  bool _shouldCaptureAudio(LocalAiEvent event) {
+    switch (event.type) {
+      case LocalAiEventType.humanVoiceDetected:
+      case LocalAiEventType.whisperDetected:
+      case LocalAiEventType.multipleVoicesDetected:
+      case LocalAiEventType.voiceSourceEstimated:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  bool _shouldCaptureCamera(LocalAiEvent event) {
+    switch (event.type) {
+      case LocalAiEventType.faceMissing:
+      case LocalAiEventType.multipleFacesDetected:
+      case LocalAiEventType.lookingAway:
+      case LocalAiEventType.phoneDetected:
+      case LocalAiEventType.prohibitedMaterialDetected:
+        return true;
+      default:
+        return false;
+    }
   }
 
   String _messageFor(LocalAiEvent event) {
