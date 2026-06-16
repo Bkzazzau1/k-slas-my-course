@@ -19,6 +19,14 @@ void main() {
 
     final service = ExamStartTrustService(
       repository: repository,
+      deviceFingerprintService: DeviceFingerprintService(
+        fixedFingerprint: const DeviceFingerprint(
+          deviceId: 'test-device-001',
+          deviceType: 'desktop_or_laptop',
+          osName: 'windows',
+          appVersion: '1.0.0',
+        ),
+      ),
       liveFaceEmbeddingSource: const StaticLiveFaceEmbeddingSource(
         embedding: <double>[1, 0, 0],
       ),
