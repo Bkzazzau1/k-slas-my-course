@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:my_courses/data/models/integrity_models.dart';
+import 'package:my_courses/data/services/integrity_event_writer.dart';
 import 'package:my_courses/data/services/integrity_ledger_service.dart';
 
 void main() {
@@ -59,6 +60,32 @@ void main() {
     expect(pending.single.eventType, 'phoneDetected');
     expect(pending.single.severity, 'high');
     expect(pending.single.syncedAt, isNull);
+  });
+
+  test('IntegrityEventWriter should create a pending ledger event', () async {
+    final profile = await IntegrityEventWriter.write(
+      studentId: 'KASU/CSC/001',
+      sessionId: 'session-001',
+      reason: 'Face missing from camera view.',
+      points: 20,
+      level: 'highStakesExam',
+      scoreAfter: 80,
+      strikesAfter: 0,
+      tier: IntegrityRiskTier.low,
+      riskAfter: 20,
+      type: 'faceMissing',
+      severity: 'medium',
+      confidence: 0.91,
+      alert: true,
+      data: <String, Object?>{'source': 'unit_test'},
+    );
+
+    expect(profile.unsyncedLedgerCount, 1);
+    final pending = IntegrityLedgerService.pendingLedgerEntries('KASU/CSC/001');
+    expect(pending, hasLength(1));
+    expect(pending.single.eventType, 'faceMissing');
+    expect(pending.single.shouldAlert, isTrue);
+    expect(pending.single.metadata['source'], 'unit_test');
   });
 
   test('flushPendingLedger should mark uploaded events as synced', () async {
@@ -128,7 +155,7 @@ IntegrityLedgerEntry _entry({
     studentId: 'KASU/CSC/001',
     sessionId: 'session-001',
     occurredAt: DateTime.now(),
-    reason: 'Test proctoring event: $eventType',
+    reason: 'Test integrity event: $eventType',
     penalty: riskScoreAfter,
     level: 'highStakesExam',
     integrityScoreAfter: (100 - riskScoreAfter).clamp(0, 100).toInt(),
