@@ -8,6 +8,7 @@ class ObjectDetectionObservation {
     required this.confidence,
     this.boundingBox,
     this.isAllowedByPolicy = false,
+    this.metadata = const <String, Object?>{},
   });
 
   final DateTime timestamp;
@@ -15,6 +16,7 @@ class ObjectDetectionObservation {
   final double confidence;
   final Map<String, num>? boundingBox;
   final bool isAllowedByPolicy;
+  final Map<String, Object?> metadata;
 }
 
 class ObjectDetectionDetector
@@ -58,6 +60,7 @@ class ObjectDetectionDetector
           'label': input.label,
           'boundingBox': input.boundingBox,
           'isAllowedByPolicy': input.isAllowedByPolicy,
+          ...input.metadata,
         },
       ),
     ];
