@@ -1,3 +1,4 @@
+import '../../../data/services/live_session_runtime_mode_service.dart';
 import 'face_embedding_connector_selector.dart';
 import 'identity_trust_bootstrap.dart';
 
@@ -7,6 +8,9 @@ class IdentityTrustDemoBootstrap {
   static void register({
     FaceEmbeddingRuntimeTarget connectorTarget = FaceEmbeddingRuntimeTarget.demo,
   }) {
-    IdentityTrustBootstrap.register(connectorTarget: connectorTarget);
+    IdentityTrustBootstrap.register(
+      connectorTarget: connectorTarget,
+      runtimeMode: LiveSessionRuntimeMode.demo,
+    );
   }
 }
