@@ -42,6 +42,14 @@ void main() {
 
     final trustService = ExamStartTrustService(
       repository: repository,
+      deviceFingerprintService: DeviceFingerprintService(
+        fixedFingerprint: const DeviceFingerprint(
+          deviceId: 'test-device-002',
+          deviceType: 'desktop_or_laptop',
+          osName: 'windows',
+          appVersion: '1.0.0',
+        ),
+      ),
       liveFaceEmbeddingSource: liveSource,
     );
 
