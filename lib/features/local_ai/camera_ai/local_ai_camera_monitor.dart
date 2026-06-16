@@ -7,7 +7,10 @@ import '../core/local_ai_event.dart';
 import 'camera_face_source.dart';
 import 'camera_frame_sampler.dart';
 import 'face_presence_detector.dart';
+import 'fallback_camera_face_source.dart';
 import 'frame_heuristic_face_source.dart';
+import 'model_backed_face_source.dart';
+import 'tflite_face_model_connector.dart';
 
 class LocalAiCameraMonitor {
   LocalAiCameraMonitor({
@@ -16,7 +19,7 @@ class LocalAiCameraMonitor {
     CameraFaceSource? faceSource,
     FacePresenceDetector? faceDetector,
     CameraFrameSampler? sampler,
-  }) : faceSource = faceSource ?? const FrameHeuristicFaceSource(),
+  }) : faceSource = faceSource ?? _defaultFaceSource(),
        faceDetector = faceDetector ?? FacePresenceDetector(),
        sampler = sampler ?? CameraFrameSampler();
 
@@ -31,6 +34,15 @@ class LocalAiCameraMonitor {
   DateTime? _faceMissingSince;
 
   bool get isRunning => _running;
+
+  static CameraFaceSource _defaultFaceSource() {
+    return FallbackCameraFaceSource(
+      primary: ModelBackedFaceSource(
+        connector: TfliteFaceModelConnector(),
+      ),
+      fallback: const FrameHeuristicFaceSource(),
+    );
+  }
 
   Future<void> start() async {
     if (_running) return;
