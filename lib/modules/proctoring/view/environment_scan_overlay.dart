@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image/image.dart' as img;
@@ -11,6 +12,7 @@ import '../../../features/local_ai/audio_ai/audio_environment_learning_service.d
 import '../../../features/local_ai/audio_ai/environment_sound_classifier.dart';
 import '../../../features/local_ai/object_ai/camera_object_source.dart';
 import '../../../features/local_ai/object_ai/rust_scan_camera_object_source.dart';
+import '../../../rust/api/proctoring.dart' as rust_proctoring;
 import '../controller/proctoring_controller.dart';
 import '../services/environment_identity_trust_gate.dart';
 
@@ -68,6 +70,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   double targetMotionScore = 0;
   int targetMovingFrames = 0;
   double scanLightingAverage = 0;
+  double latestMovementScore = 0;
+  double latestSceneDiversityScore = 1;
+  double latestLightingScore = 0;
+  String latestScanMode = 'not-started';
+  String latestAiSource = 'none';
   bool scanCompletionReviewed = false;
   bool environmentAlertReported = false;
   final Set<String> rotationCoverage = <String>{};
@@ -102,6 +109,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   static const double _minimumSceneChangeScore = 0.032;
   static const double _targetMotionRequired = 0.075;
   static const int _targetMovingFramesRequired = 3;
+  static const Set<String> _allowedScanLabels = <String>{
+    'background',
+    'none',
+    'clean',
+  };
 
   @override
   void initState() {
@@ -460,6 +472,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     targetMotionScore = 0;
     targetMovingFrames = 0;
     scanLightingAverage = 0;
+    latestMovementScore = 0;
+    latestSceneDiversityScore = 1;
+    latestLightingScore = 0;
+    latestScanMode = 'starting';
+    latestAiSource = 'none';
     scanCompletionReviewed = false;
     environmentAlertReported = false;
     rotationCoverage.clear();
@@ -473,11 +490,24 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     final controller = camera;
     if (controller == null || !controller.value.isInitialized) return;
 
+    if (_shouldUseStillCaptureFirst) {
+      _startStillCaptureScan();
+      return;
+    }
+
     try {
       await controller.startImageStream(_onRoomScanFrame);
+      latestScanMode = 'live-frame';
     } catch (_) {
+      latestScanMode = 'stream-unavailable';
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (!mounted || !frameScanActive) return;
       _startStillCaptureScan();
     }
+  }
+
+  bool get _shouldUseStillCaptureFirst {
+    return !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
   }
 
   Future<void> _stopAutomaticRoomScan() async {
@@ -497,6 +527,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
 
   void _startStillCaptureScan() {
     usingStillCaptureFallback = true;
+    latestScanMode = 'still-frame';
     stillScanTimer?.cancel();
     if (!mounted) return;
     setState(() {
@@ -504,10 +535,12 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
           'Camera stream is limited, so still-frame AI scan is active. Slowly move through each target.';
     });
 
-    stillScanTimer = Timer.periodic(const Duration(milliseconds: 850), (_) {
+    stillScanTimer = Timer.periodic(const Duration(milliseconds: 1400), (_) {
       _captureStillScanFrame();
     });
-    _captureStillScanFrame();
+    Future<void>.delayed(const Duration(milliseconds: 500), () {
+      if (mounted && frameScanActive) _captureStillScanFrame();
+    });
   }
 
   Future<void> _captureStillScanFrame() async {
@@ -531,6 +564,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
           lightingScore: proctoring.scanLightingScore.value,
           movementScore: 0,
           signature: null,
+          sceneDiversityScore: 0,
         );
         return;
       }
@@ -538,12 +572,15 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       scanFrameCount++;
       final luma = _averageDecodedLuma(decoded);
       final signature = _decodedFrameSignature(decoded);
+      if (scanFrameCount % 3 == 0) {
+        _analyzeDecodedEnvironmentObjects(decoded);
+      }
       _processScanSample(luma: luma, signature: signature);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         statusText =
-            'Still-frame capture failed. Check camera permission and try the room scan again. $e';
+            'Camera is busy during still-frame scan. Keep the camera open and move slowly; the app will keep retrying. $e';
       });
     } finally {
       analyzingScanFrame = false;
@@ -573,16 +610,21 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     required List<int> signature,
   }) {
     final movement = _frameChangeScore(previousFrameSignature, signature);
+    final sceneDiversity = _sceneDiversityScore(signature);
     previousFrameSignature = signature;
     scanLightingAverage = scanFrameCount <= 1
         ? luma
         : ((scanLightingAverage * (scanFrameCount - 1)) + luma) /
               scanFrameCount;
+    latestMovementScore = movement;
+    latestSceneDiversityScore = sceneDiversity;
+    latestLightingScore = _lightingScoreFromLuma(scanLightingAverage);
 
     _registerScanMotion(
-      lightingScore: _lightingScoreFromLuma(scanLightingAverage),
+      lightingScore: latestLightingScore,
       movementScore: movement,
       signature: signature,
+      sceneDiversityScore: sceneDiversity,
     );
   }
 
@@ -701,6 +743,9 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       );
       if (observations.isEmpty) return;
       final scanTarget = _currentScanTarget ?? 'startup room scan';
+      latestAiSource = usingStillCaptureFallback
+          ? 'still-frame rust'
+          : 'live-frame rust';
       for (final observation in observations) {
         final label = observation.label.trim();
         if (label.isEmpty) continue;
@@ -710,6 +755,44 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     } catch (_) {
       // Frame coverage still proceeds when the local detector is unavailable.
     }
+  }
+
+  void _analyzeDecodedEnvironmentObjects(img.Image image) {
+    try {
+      final decision = rust_proctoring.analyzeScanFrame(
+        plane0Bytes: _decodedLumaPlane(image),
+        width: image.width,
+        height: image.height,
+        bytesPerRow: image.width,
+        pixelFormat: 'luma8',
+      );
+      final scanTarget = _currentScanTarget ?? 'startup room scan';
+      latestAiSource = 'still-frame rust';
+      for (final rawLabel in decision.objectLabels) {
+        final label = rawLabel.trim();
+        if (label.isEmpty) continue;
+        if (_allowedScanLabels.contains(label.toLowerCase())) continue;
+        environmentFindings.add(label);
+        environmentFindingTargets[label] = scanTarget;
+      }
+    } catch (_) {
+      // Still-frame scan should continue even if the detector is unavailable.
+    }
+  }
+
+  List<int> _decodedLumaPlane(img.Image image) {
+    final bytes = List<int>.filled(image.width * image.height, 0);
+    var offset = 0;
+    for (var y = 0; y < image.height; y++) {
+      for (var x = 0; x < image.width; x++) {
+        final pixel = image.getPixel(x, y);
+        bytes[offset++] =
+            ((pixel.r * 0.299) + (pixel.g * 0.587) + (pixel.b * 0.114))
+                .round()
+                .clamp(0, 255);
+      }
+    }
+    return bytes;
   }
 
   Future<void> _reportScanAlertToBackend({
@@ -919,6 +1002,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     required double lightingScore,
     required double movementScore,
     required List<int>? signature,
+    required double sceneDiversityScore,
   }) {
     if (!mounted || !cameraReady || cameraFailed || startingExam) return;
 
@@ -950,9 +1034,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       return;
     }
 
-    final uniqueSceneScore = _sceneDiversityScore(signature);
     if (acceptedSceneSignatures.isNotEmpty &&
-        uniqueSceneScore < _minimumSceneChangeScore) {
+        sceneDiversityScore < _minimumSceneChangeScore) {
       statusText =
           'This looks like the same area already captured. Rotate further until a different part of the room is visible.';
       targetMotionScore = 0;
@@ -1449,7 +1532,96 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
             ),
           ),
         ],
+        const SizedBox(height: 8),
+        _calibrationPanel(),
       ],
+    );
+  }
+
+  Widget _calibrationPanel() {
+    final currentTarget = _currentScanTarget ?? 'complete';
+    final accepted = acceptedSceneSignatures.keys.join(', ');
+    final findings = environmentFindings.isEmpty
+        ? 'none'
+        : environmentFindings.join(', ');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tune_rounded, color: Colors.white, size: 16),
+              const SizedBox(width: 6),
+              const Text(
+                'Calibration',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                latestScanMode,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.76),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              _debugChip('target', currentTarget),
+              _debugChip('frames', '$scanFrameCount'),
+              _debugChip('light', '${(latestLightingScore * 100).round()}%'),
+              _debugChip('motion', latestMovementScore.toStringAsFixed(3)),
+              _debugChip('scene', latestSceneDiversityScore.toStringAsFixed(3)),
+              _debugChip(
+                'target motion',
+                '${targetMotionScore.toStringAsFixed(3)}/${_targetMotionRequired.toStringAsFixed(3)}',
+              ),
+              _debugChip(
+                'moving frames',
+                '$targetMovingFrames/$_targetMovingFramesRequired',
+              ),
+              _debugChip('AI', latestAiSource),
+              _debugChip('labels', findings),
+              _debugChip('accepted', accepted.isEmpty ? 'none' : accepted),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _debugChip(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Text(
+        '$label: $value',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 
