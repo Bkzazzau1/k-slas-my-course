@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "notes": "Use staged, non-sensitive calibration images only. Add relative image paths under each scenario before running detector calibration tests.",
+  "scenarios": [
+    {
+      "id": "clean_room",
+      "expectedLabels": [],
+      "expectedDecision": "acceptable",
+      "images": []
+    },
+    {
+      "id": "phone_on_desk",
+      "expectedLabels": ["cell phone"],
+      "expectedDecision": "forbidden_item",
+      "images": []
+    },
+    {
+      "id": "book_paper_note",
+      "expectedLabels": ["book"],
+      "expectedDecision": "forbidden_item",
+      "images": []
+    },
+    {
+      "id": "second_screen_tv",
+      "expectedLabels": ["tv"],
+      "expectedDecision": "forbidden_item",
+      "images": []
+    },
+    {
+      "id": "headphones_earpiece",
+      "expectedLabels": ["headphone"],
+      "expectedDecision": "forbidden_item",
+      "images": []
+    },
+    {
+      "id": "calculator",
+      "expectedLabels": ["calculator"],
+      "expectedDecision": "forbidden_item",
+      "images": []
+    },
+    {
+      "id": "another_person",
+      "expectedLabels": ["person"],
+      "expectedDecision": "pending_review",
+      "images": []
+    },
+    {
+      "id": "dark_room",
+      "expectedLabels": [],
+      "expectedDecision": "bad_environment",
+      "images": []
+    },
+    {
+      "id": "outdoor_public_space",
+      "expectedLabels": ["car"],
+      "expectedDecision": "bad_environment",
+      "images": []
+    },
+    {
+      "id": "vehicle",
+      "expectedLabels": ["car"],
+      "expectedDecision": "bad_environment",
+      "images": []
+    },
+    {
+      "id": "desk_lap_walls_ceiling_floor",
+      "expectedLabels": [],
+      "expectedDecision": "coverage",
+      "images": []
+    }
+  ]
+}

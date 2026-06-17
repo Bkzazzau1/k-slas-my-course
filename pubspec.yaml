@@ -55,3 +55,4 @@ flutter:
 
   assets:
     - assets/ml_models/
+    - assets/local_ai_calibration_samples/

@@ -1,6 +1,7 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:my_courses/features/local_ai/object_ai/tflite_object_detection_source.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
@@ -35,6 +36,21 @@ void main() {
 
     final observations = await source.analyzeFrame(
       image: _fakeImage(width: 320, height: 320, value: 128),
+      timestamp: DateTime.now(),
+    );
+
+    expect(observations, isA<List>());
+  });
+
+  test('bundled source can run a decoded RGB still image', () async {
+    final source = TfliteObjectDetectionSource();
+    addTearDown(source.dispose);
+
+    final image = img.Image(width: 320, height: 320);
+    img.fill(image, color: img.ColorRgb8(128, 128, 128));
+
+    final observations = await source.analyzeImage(
+      image: image,
       timestamp: DateTime.now(),
     );
 

@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
 
 import 'camera_object_source.dart';
@@ -147,6 +148,57 @@ class TfliteObjectDetectionSource implements CameraObjectSource {
     );
   }
 
+  Future<List<ObjectDetectionObservation>> analyzeImage({
+    required img.Image image,
+    required DateTime timestamp,
+  }) async {
+    await load();
+    final interpreter = _interpreter;
+    if (interpreter == null) {
+      throw StateError('TFLite object model has not been loaded.');
+    }
+
+    final input = _buildImageInput(image, interpreter);
+    final boxShape = interpreter.getOutputTensor(config.outputBoxIndex).shape;
+    final classShape = interpreter
+        .getOutputTensor(config.outputClassIndex)
+        .shape;
+    final scoreShape = interpreter
+        .getOutputTensor(config.outputScoreIndex)
+        .shape;
+
+    final boxes = _zeros3d(boxShape);
+    final classes = _zeros2d(classShape);
+    final scores = _zeros2d(scoreShape);
+    final counts = List<double>.filled(1, 0);
+    final outputs = <int, Object>{
+      config.outputBoxIndex: boxes,
+      config.outputClassIndex: classes,
+      config.outputScoreIndex: scores,
+      config.outputCountIndex: counts,
+    };
+
+    interpreter.runForMultipleInputs(<Object>[input], outputs);
+
+    return TfliteObjectOutputDecoder.decode(
+      rawBoxes: boxes.first,
+      rawClasses: classes.first,
+      rawScores: scores.first,
+      rawCount: counts.first,
+      labels: _labels ?? config.labels,
+      imageWidth: image.width,
+      imageHeight: image.height,
+      timestamp: timestamp,
+      confidenceThreshold: config.confidenceThreshold,
+      phoneBlockConfidence: config.phoneBlockConfidence,
+      manualReviewConfidence: config.manualReviewConfidence,
+      maximumObjects: config.maximumObjects,
+      allowedLabels: config.allowedLabels,
+      prohibitedLabels: config.prohibitedLabels,
+      manualReviewLabels: config.manualReviewLabels,
+    );
+  }
+
   Future<List<String>> _loadLabels(String assetPath) async {
     final raw = await rootBundle.loadString(assetPath);
     return raw
@@ -197,6 +249,52 @@ class TfliteObjectDetectionSource implements CameraObjectSource {
             unit * (config.inputMaximum - config.inputMinimum);
         final pixel = input[0][y][x];
         for (var c = 0; c < pixel.length; c++) {
+          pixel[c] = useUint8 ? normalized.round().clamp(0, 255) : normalized;
+        }
+      }
+    }
+
+    return input;
+  }
+
+  Object _buildImageInput(img.Image image, Interpreter interpreter) {
+    final useUint8 = interpreter
+        .getInputTensor(0)
+        .type
+        .toString()
+        .toLowerCase()
+        .contains('uint8');
+    final input = List.generate(
+      1,
+      (_) => List.generate(
+        config.inputHeight,
+        (_) => List.generate(
+          config.inputWidth,
+          (_) => List<num>.filled(config.inputChannels, 0),
+        ),
+      ),
+    );
+
+    for (var y = 0; y < config.inputHeight; y++) {
+      final srcY = ((y + 0.5) * image.height / config.inputHeight)
+          .floor()
+          .clamp(0, image.height - 1);
+      for (var x = 0; x < config.inputWidth; x++) {
+        final srcX = ((x + 0.5) * image.width / config.inputWidth)
+            .floor()
+            .clamp(0, image.width - 1);
+        final sourcePixel = image.getPixel(srcX, srcY);
+        final values = <double>[
+          sourcePixel.r / 255.0,
+          sourcePixel.g / 255.0,
+          sourcePixel.b / 255.0,
+        ];
+        final pixel = input[0][y][x];
+        for (var c = 0; c < pixel.length; c++) {
+          final value = values[c.clamp(0, values.length - 1)];
+          final normalized =
+              config.inputMinimum +
+              value * (config.inputMaximum - config.inputMinimum);
           pixel[c] = useUint8 ? normalized.round().clamp(0, 255) : normalized;
         }
       }

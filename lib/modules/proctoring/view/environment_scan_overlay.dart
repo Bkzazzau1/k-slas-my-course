@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image/image.dart' as img;
@@ -11,10 +10,15 @@ import '../../../data/services/exam_proctoring_backend_service.dart';
 import '../../../features/local_ai/audio_ai/audio_environment_learning_service.dart';
 import '../../../features/local_ai/audio_ai/environment_sound_classifier.dart';
 import '../../../features/local_ai/object_ai/camera_object_source.dart';
+import '../../../features/local_ai/object_ai/fallback_camera_object_source.dart';
 import '../../../features/local_ai/object_ai/rust_scan_camera_object_source.dart';
+import '../../../features/local_ai/object_ai/tflite_object_detection_source.dart';
 import '../../../rust/api/proctoring.dart' as rust_proctoring;
 import '../controller/proctoring_controller.dart';
+import '../services/camera_scan_frame_source.dart';
 import '../services/environment_identity_trust_gate.dart';
+import '../services/pre_exam_scan_evidence_service.dart';
+import '../services/scan_threshold_calibration_service.dart';
 
 enum _GateStepState { pending, running, passed, failed }
 
@@ -61,9 +65,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   String? audioDetail;
   String? connectionDetail;
   String? finalDetail;
-  Timer? stillScanTimer;
   bool frameScanActive = false;
-  bool analyzingScanFrame = false;
   bool usingStillCaptureFallback = false;
   int scanFrameCount = 0;
   List<int>? previousFrameSignature;
@@ -83,7 +85,12 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   final Set<String> reportedForbiddenLabels = <String>{};
   final Map<String, String> environmentFindingTargets = <String, String>{};
   final Map<String, List<int>> acceptedSceneSignatures = <String, List<int>>{};
-  final CameraObjectSource objectSource = const RustScanCameraObjectSource();
+  late final TfliteObjectDetectionSource stillObjectSource;
+  late final CameraObjectSource objectSource;
+  late final ScanThresholdCalibration scanThresholds;
+  late final CameraScanFrameSource cameraScanFrameSource;
+  final PreExamScanEvidenceService scanEvidenceService =
+      PreExamScanEvidenceService();
   _GateStepState identityState = _GateStepState.pending;
   _GateStepState audioState = _GateStepState.pending;
   _GateStepState connectionState = _GateStepState.pending;
@@ -105,10 +112,6 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     'walls',
     'surroundings',
   ];
-  static const double _movementThreshold = 0.010;
-  static const double _minimumSceneChangeScore = 0.032;
-  static const double _targetMotionRequired = 0.075;
-  static const int _targetMovingFramesRequired = 3;
   static const Set<String> _allowedScanLabels = <String>{
     'background',
     'none',
@@ -118,6 +121,17 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   @override
   void initState() {
     super.initState();
+    stillObjectSource = TfliteObjectDetectionSource();
+    objectSource = FallbackCameraObjectSource(
+      primary: stillObjectSource,
+      fallback: const RustScanCameraObjectSource(),
+    );
+    scanThresholds = ScanThresholdCalibrationService().load();
+    cameraScanFrameSource = DefaultCameraScanFrameSource(
+      stillCaptureInterval: Duration(
+        milliseconds: scanThresholds.stillCaptureIntervalMs,
+      ),
+    );
     proctoring = Get.find<ProctoringController>();
     _openCamera();
   }
@@ -189,14 +203,17 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
 
   bool get scanFinished => proctoring.scanProgress.value >= 1.0 || cameraFailed;
 
+  double get _minimumLightingScore =>
+      scanThresholds.minimumLightingScore ??
+      proctoring.minimumScanLightingScore;
+
   bool get scanPassed {
     return !cameraFailed &&
         cameraReady &&
         proctoring.scanProgress.value >= 1.0 &&
         proctoring.scanRotationConfirmed.value &&
         proctoring.scanUnauthorizedItemsReviewed.value &&
-        proctoring.scanLightingScore.value >=
-            proctoring.minimumScanLightingScore &&
+        proctoring.scanLightingScore.value >= _minimumLightingScore &&
         proctoring.scanForbiddenObjects.isEmpty &&
         _currentEnvironmentDecision.allowed;
   }
@@ -216,8 +233,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
         'Unauthorized material scan was not completed. Show the desk surface, lap area, walls, and surrounding room until each area is captured.',
       );
     }
-    if (proctoring.scanLightingScore.value <
-        proctoring.minimumScanLightingScore) {
+    if (proctoring.scanLightingScore.value < _minimumLightingScore) {
       failed.add(
         'Lighting failed. Move to a brighter room or switch on more light.',
       );
@@ -462,6 +478,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   @override
   void dispose() {
     _disposeCamera();
+    unawaited(stillObjectSource.dispose());
     super.dispose();
   }
 
@@ -486,128 +503,75 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     environmentFindingTargets.clear();
     acceptedSceneSignatures.clear();
     frameScanActive = true;
+    await scanEvidenceService.startScan();
 
     final controller = camera;
     if (controller == null || !controller.value.isInitialized) return;
 
-    if (_shouldUseStillCaptureFirst) {
-      _startStillCaptureScan();
-      return;
-    }
-
-    try {
-      await controller.startImageStream(_onRoomScanFrame);
-      latestScanMode = 'live-frame';
-    } catch (_) {
-      latestScanMode = 'stream-unavailable';
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-      if (!mounted || !frameScanActive) return;
-      _startStillCaptureScan();
-    }
-  }
-
-  bool get _shouldUseStillCaptureFirst {
-    return !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+    await cameraScanFrameSource.start(
+      controller: controller,
+      shouldContinue: () => mounted && frameScanActive && !scanFinished,
+      onFrame: _onScanFrame,
+      onStatus: _onFrameSourceStatus,
+    );
   }
 
   Future<void> _stopAutomaticRoomScan() async {
-    stillScanTimer?.cancel();
-    stillScanTimer = null;
+    await cameraScanFrameSource.stop(camera);
     frameScanActive = false;
-    analyzingScanFrame = false;
     usingStillCaptureFallback = false;
-    final controller = camera;
-    if (controller == null || !controller.value.isInitialized) return;
-    try {
-      if (controller.value.isStreamingImages) {
-        await controller.stopImageStream();
-      }
-    } catch (_) {}
   }
 
-  void _startStillCaptureScan() {
-    usingStillCaptureFallback = true;
-    latestScanMode = 'still-frame';
-    stillScanTimer?.cancel();
+  void _onFrameSourceStatus(String status) {
+    latestScanMode = status;
+    usingStillCaptureFallback = status.startsWith('still-frame');
     if (!mounted) return;
-    setState(() {
-      statusText =
-          'Camera stream is limited, so still-frame AI scan is active. Slowly move through each target.';
-    });
-
-    stillScanTimer = Timer.periodic(const Duration(milliseconds: 1400), (_) {
-      _captureStillScanFrame();
-    });
-    Future<void>.delayed(const Duration(milliseconds: 500), () {
-      if (mounted && frameScanActive) _captureStillScanFrame();
-    });
-  }
-
-  Future<void> _captureStillScanFrame() async {
-    final controller = camera;
-    if (!mounted ||
-        !frameScanActive ||
-        analyzingScanFrame ||
-        scanFinished ||
-        controller == null ||
-        !controller.value.isInitialized) {
-      return;
-    }
-
-    analyzingScanFrame = true;
-    try {
-      final file = await controller.takePicture();
-      final bytes = await file.readAsBytes();
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) {
-        _registerScanMotion(
-          lightingScore: proctoring.scanLightingScore.value,
-          movementScore: 0,
-          signature: null,
-          sceneDiversityScore: 0,
-        );
-        return;
-      }
-
-      scanFrameCount++;
-      final luma = _averageDecodedLuma(decoded);
-      final signature = _decodedFrameSignature(decoded);
-      if (scanFrameCount % 3 == 0) {
-        _analyzeDecodedEnvironmentObjects(decoded);
-      }
-      _processScanSample(luma: luma, signature: signature);
-    } catch (e) {
-      if (!mounted) return;
+    if (status == 'still-frame') {
       setState(() {
         statusText =
-            'Camera is busy during still-frame scan. Keep the camera open and move slowly; the app will keep retrying. $e';
+            'Camera stream is limited, so still-frame AI scan is active. Slowly move through each target.';
       });
-    } finally {
-      analyzingScanFrame = false;
+    } else if (status.startsWith('still-frame-busy')) {
+      setState(() {
+        statusText = status.replaceFirst('still-frame-busy: ', '');
+      });
+    } else if (status == 'live-frame') {
+      setState(() {
+        statusText =
+            'Live-frame AI scan is active. Slowly move through each target.';
+      });
     }
   }
 
-  Future<void> _onRoomScanFrame(CameraImage image) async {
-    if (!mounted || !frameScanActive || analyzingScanFrame || scanFinished) {
-      return;
-    }
-    analyzingScanFrame = true;
-    try {
-      scanFrameCount++;
-      final luma = _averageLuma(image);
-      final signature = _frameSignature(image);
+  Future<void> _onScanFrame(CameraScanFrame frame) async {
+    if (!mounted || !frameScanActive || scanFinished) return;
+    scanFrameCount++;
+    latestScanMode = frame.mode;
+    usingStillCaptureFallback = frame.mode == 'still-frame';
+
+    final cameraImage = frame.cameraImage;
+    final decodedImage = frame.decodedImage;
+    if (cameraImage != null) {
       if (scanFrameCount % 10 == 0) {
-        await _analyzeEnvironmentObjects(image);
+        await _analyzeEnvironmentObjects(cameraImage);
       }
-      _processScanSample(luma: luma, signature: signature);
-    } finally {
-      analyzingScanFrame = false;
     }
+    if (decodedImage != null && scanFrameCount % 3 == 0) {
+      _analyzeDecodedEnvironmentObjects(decodedImage);
+    }
+    await _processScanSample(
+      luma: frame.luma,
+      signature: frame.signature,
+      decodedImage: decodedImage,
+      cameraImage: cameraImage,
+    );
   }
 
-  void _processScanSample({
+  Future<void> _processScanSample({
     required double luma,
     required List<int> signature,
+    img.Image? decodedImage,
+    CameraImage? cameraImage,
   }) {
     final movement = _frameChangeScore(previousFrameSignature, signature);
     final sceneDiversity = _sceneDiversityScore(signature);
@@ -620,84 +584,14 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     latestSceneDiversityScore = sceneDiversity;
     latestLightingScore = _lightingScoreFromLuma(scanLightingAverage);
 
-    _registerScanMotion(
+    return _registerScanMotion(
       lightingScore: latestLightingScore,
       movementScore: movement,
       signature: signature,
       sceneDiversityScore: sceneDiversity,
+      decodedImage: decodedImage,
+      cameraImage: cameraImage,
     );
-  }
-
-  double _averageLuma(CameraImage image) {
-    if (image.planes.isEmpty || image.planes.first.bytes.isEmpty) return 0.5;
-    final bytes = image.planes.first.bytes;
-    final step = math.max(1, bytes.length ~/ 600);
-    var total = 0;
-    var count = 0;
-    for (var i = 0; i < bytes.length; i += step) {
-      total += bytes[i];
-      count++;
-    }
-    if (count == 0) return 0.5;
-    return (total / count / 255).clamp(0.0, 1.0);
-  }
-
-  List<int> _frameSignature(CameraImage image) {
-    if (image.planes.isEmpty || image.planes.first.bytes.isEmpty) {
-      return const <int>[128];
-    }
-    final bytes = image.planes.first.bytes;
-    const buckets = 48;
-    final signature = <int>[];
-    for (var bucket = 0; bucket < buckets; bucket++) {
-      final start = (bytes.length * bucket / buckets).floor();
-      final end = (bytes.length * (bucket + 1) / buckets).floor();
-      if (end <= start) {
-        signature.add(bytes[start.clamp(0, bytes.length - 1)]);
-        continue;
-      }
-      var total = 0;
-      var count = 0;
-      final step = math.max(1, (end - start) ~/ 12);
-      for (var i = start; i < end; i += step) {
-        total += bytes[i];
-        count++;
-      }
-      signature.add(count == 0 ? 128 : (total / count).round());
-    }
-    return signature;
-  }
-
-  double _averageDecodedLuma(img.Image image) {
-    final stepX = math.max(1, image.width ~/ 24);
-    final stepY = math.max(1, image.height ~/ 24);
-    var total = 0.0;
-    var count = 0;
-    for (var y = 0; y < image.height; y += stepY) {
-      for (var x = 0; x < image.width; x += stepX) {
-        final pixel = image.getPixel(x, y);
-        total += (pixel.r * 0.299) + (pixel.g * 0.587) + (pixel.b * 0.114);
-        count++;
-      }
-    }
-    if (count == 0) return 0.5;
-    return (total / count / 255).clamp(0.0, 1.0);
-  }
-
-  List<int> _decodedFrameSignature(img.Image image) {
-    const buckets = 48;
-    final signature = <int>[];
-    for (var bucket = 0; bucket < buckets; bucket++) {
-      final x = ((bucket % 8) + 0.5) * image.width / 8;
-      final y = ((bucket ~/ 8) + 0.5) * image.height / 6;
-      final pixel = image.getPixel(
-        x.floor().clamp(0, image.width - 1),
-        y.floor().clamp(0, image.height - 1),
-      );
-      final luma = (pixel.r * 0.299) + (pixel.g * 0.587) + (pixel.b * 0.114);
-      signature.add(luma.round().clamp(0, 255));
-    }
-    return signature;
   }
 
   double _frameChangeScore(List<int>? previous, List<int> current) {
@@ -758,6 +652,31 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   }
 
   void _analyzeDecodedEnvironmentObjects(img.Image image) {
+    unawaited(_analyzeDecodedEnvironmentObjectsAsync(image));
+  }
+
+  Future<void> _analyzeDecodedEnvironmentObjectsAsync(img.Image image) async {
+    try {
+      final observations = await stillObjectSource.analyzeImage(
+        image: image,
+        timestamp: DateTime.now(),
+      );
+      if (observations.isNotEmpty) {
+        final scanTarget = _currentScanTarget ?? 'startup room scan';
+        latestAiSource = 'still-frame tflite-rgb';
+        for (final observation in observations) {
+          final label = observation.label.trim();
+          if (label.isEmpty) continue;
+          if (_allowedScanLabels.contains(label.toLowerCase())) continue;
+          environmentFindings.add(label);
+          environmentFindingTargets[label] = scanTarget;
+        }
+        return;
+      }
+    } catch (_) {
+      // Fall back to the luma-based Rust scan below.
+    }
+
     try {
       final decision = rust_proctoring.analyzeScanFrame(
         plane0Bytes: _decodedLumaPlane(image),
@@ -894,6 +813,69 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     );
   }
 
+  Future<void> _saveAcceptedTargetEvidence({
+    required String target,
+    required double lightingScore,
+    required double movementScore,
+    required double sceneDiversityScore,
+    img.Image? decodedImage,
+    CameraImage? cameraImage,
+  }) async {
+    final labels = environmentFindings.toList(growable: false);
+    PreExamScanEvidenceTarget? savedTarget;
+    if (decodedImage != null) {
+      savedTarget = await scanEvidenceService.saveDecodedTarget(
+        target: target,
+        image: decodedImage,
+        labels: labels,
+        lightingScore: lightingScore,
+        movementScore: movementScore,
+        sceneDiversityScore: sceneDiversityScore,
+      );
+    } else if (cameraImage != null) {
+      savedTarget = await scanEvidenceService.saveCameraImageTarget(
+        target: target,
+        image: cameraImage,
+        labels: labels,
+        lightingScore: lightingScore,
+        movementScore: movementScore,
+        sceneDiversityScore: sceneDiversityScore,
+      );
+    }
+
+    await _logScanCalibration(
+      target: target,
+      lightingScore: lightingScore,
+      movementScore: movementScore,
+      sceneDiversityScore: sceneDiversityScore,
+      framePath: savedTarget?.path,
+      note: 'accepted_target',
+    );
+  }
+
+  Future<void> _logScanCalibration({
+    required String target,
+    required double lightingScore,
+    required double movementScore,
+    required double sceneDiversityScore,
+    String? framePath,
+    String? note,
+  }) async {
+    final labels = environmentFindings.toList(growable: false);
+    await scanEvidenceService.logCalibrationEntry(
+      target: target,
+      frameSourceMode: latestScanMode,
+      lightingScore: lightingScore,
+      movementScore: movementScore,
+      sceneDiversityScore: sceneDiversityScore,
+      detectedLabels: labels,
+      forbiddenLabels: _forbiddenScanLabels(labels),
+      environmentDecision: _currentEnvironmentDecision.type.name,
+      framePath: framePath,
+      note: note,
+    );
+  }
+
   EnvironmentSuitabilityDecision get _currentEnvironmentDecision {
     return _classifyEnvironment(
       labels: environmentFindings.toList(growable: false),
@@ -907,7 +889,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   }) {
     final lower = labels.map((label) => label.toLowerCase()).toList();
 
-    if (lightingScore < proctoring.minimumScanLightingScore) {
+    if (lightingScore < _minimumLightingScore) {
       return const EnvironmentSuitabilityDecision(
         type: ExamRoomEnvironmentType.darkRoom,
         allowed: false,
@@ -966,11 +948,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     }
 
     return const EnvironmentSuitabilityDecision(
-      type: ExamRoomEnvironmentType.privateIndoorRoom,
-      allowed: true,
-      severity: 'low',
+      type: ExamRoomEnvironmentType.unknown,
+      allowed: false,
+      severity: 'medium',
       message:
-          'Environment detected: private indoor room. This is acceptable for the exam.',
+          'Environment could not be confidently verified. Evidence has been captured for review. Move to a private, quiet room and rescan.',
     );
   }
 
@@ -998,12 +980,14 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
         .toList(growable: false);
   }
 
-  void _registerScanMotion({
+  Future<void> _registerScanMotion({
     required double lightingScore,
     required double movementScore,
     required List<int>? signature,
     required double sceneDiversityScore,
-  }) {
+    img.Image? decodedImage,
+    CameraImage? cameraImage,
+  }) async {
     if (!mounted || !cameraReady || cameraFailed || startingExam) return;
 
     proctoring.registerEnvironmentFrameAnalysis(
@@ -1015,10 +999,17 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     final target = _currentScanTarget;
     if (target == null) return;
 
-    if (movementScore < _movementThreshold) {
+    if (movementScore < scanThresholds.movementThreshold) {
       final lightingPercent = (lightingScore * 100).round();
       statusText =
           'Light $lightingPercent%. Camera is still. Slowly move the camera to capture $target before scan progress can continue.';
+      await _logScanCalibration(
+        target: target,
+        lightingScore: lightingScore,
+        movementScore: movementScore,
+        sceneDiversityScore: sceneDiversityScore,
+        note: 'rejected_still_camera',
+      );
       _setScanProgressFromCoverage();
       setState(() {});
       return;
@@ -1029,17 +1020,31 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
           'Camera frame could not be read clearly. Move slowly and keep the room visible.';
       targetMotionScore = 0;
       targetMovingFrames = 0;
+      await _logScanCalibration(
+        target: target,
+        lightingScore: lightingScore,
+        movementScore: movementScore,
+        sceneDiversityScore: sceneDiversityScore,
+        note: 'rejected_unreadable_frame',
+      );
       _setScanProgressFromCoverage();
       setState(() {});
       return;
     }
 
     if (acceptedSceneSignatures.isNotEmpty &&
-        sceneDiversityScore < _minimumSceneChangeScore) {
+        sceneDiversityScore < scanThresholds.minimumSceneChangeScore) {
       statusText =
           'This looks like the same area already captured. Rotate further until a different part of the room is visible.';
       targetMotionScore = 0;
       targetMovingFrames = 0;
+      await _logScanCalibration(
+        target: target,
+        lightingScore: lightingScore,
+        movementScore: movementScore,
+        sceneDiversityScore: sceneDiversityScore,
+        note: 'rejected_duplicate_scene',
+      );
       _setScanProgressFromCoverage();
       setState(() {});
       return;
@@ -1047,18 +1052,26 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
 
     targetMotionScore = (targetMotionScore + movementScore).clamp(
       0.0,
-      _targetMotionRequired,
+      scanThresholds.targetMotionRequired,
     );
     targetMovingFrames++;
 
-    if (targetMotionScore >= _targetMotionRequired &&
-        targetMovingFrames >= _targetMovingFramesRequired) {
+    if (targetMotionScore >= scanThresholds.targetMotionRequired &&
+        targetMovingFrames >= scanThresholds.targetMovingFramesRequired) {
       if (rotationCoverage.length < _rotationTargets.length) {
         rotationCoverage.add(target);
       } else {
         materialCoverage.add(target);
       }
       acceptedSceneSignatures[target] = List<int>.from(signature);
+      await _saveAcceptedTargetEvidence(
+        target: target,
+        lightingScore: lightingScore,
+        movementScore: movementScore,
+        sceneDiversityScore: sceneDiversityScore,
+        decodedImage: decodedImage,
+        cameraImage: cameraImage,
+      );
       targetMotionScore = 0;
       targetMovingFrames = 0;
     }
@@ -1079,7 +1092,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       statusText = environmentFindings.isEmpty
           ? 'Automatic AI room scan completed. No unauthorized item was reported.'
           : 'Automatic AI room scan completed. Review detected item: ${environmentFindings.join(', ')}.';
-      unawaited(_reviewCompletedRoomScan());
+      await _reviewCompletedRoomScan();
       _stopAutomaticRoomScan();
     } else if (!rotationCovered) {
       final nextTarget = _rotationTargets[rotationCoverage.length];
@@ -1114,6 +1127,33 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     }
 
     final environmentDecision = _currentEnvironmentDecision;
+    final overallStatus = _scanOverallStatus(
+      forbiddenLabels: forbiddenLabels,
+      environmentDecision: environmentDecision,
+    );
+    await _logScanCalibration(
+      target: 'final_decision',
+      lightingScore: proctoring.scanLightingScore.value,
+      movementScore: latestMovementScore,
+      sceneDiversityScore: latestSceneDiversityScore,
+      note: overallStatus,
+    );
+    final manifest = await scanEvidenceService.saveManifest(
+      environmentType: environmentDecision.type.name,
+      overallStatus: overallStatus,
+    );
+    await _reportScanAlertToBackend(
+      eventType: 'pre_exam_scan_evidence',
+      message: 'Pre-exam room scan evidence captured for review.',
+      severity: environmentDecision.allowed && forbiddenLabels.isEmpty
+          ? 'low'
+          : environmentDecision.severity,
+      evidence: <String, dynamic>{
+        ...manifest.toJson(),
+        'source': 'startup_room_scan',
+      },
+    );
+
     await _handleEnvironmentSuitability(environmentDecision);
     if (!mounted) return;
     if (forbiddenLabels.isEmpty) {
@@ -1123,6 +1163,15 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
             : environmentDecision.message;
       });
     }
+  }
+
+  String _scanOverallStatus({
+    required List<String> forbiddenLabels,
+    required EnvironmentSuitabilityDecision environmentDecision,
+  }) {
+    if (forbiddenLabels.isNotEmpty) return 'failed';
+    if (!environmentDecision.allowed) return 'pending_review';
+    return 'passed';
   }
 
   String? get _currentScanTarget {
@@ -1136,10 +1185,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   }
 
   void _setScanProgressFromCoverage() {
-    final targetPartial = (targetMotionScore / _targetMotionRequired).clamp(
-      0.0,
-      1.0,
-    );
+    final targetPartial =
+        (targetMotionScore / scanThresholds.targetMotionRequired).clamp(
+          0.0,
+          1.0,
+        );
     final rotationUnit = 0.55 / _rotationTargets.length;
     final materialUnit = 0.45 / _materialTargets.length;
     final partial = rotationCoverage.length < _rotationTargets.length
@@ -1193,8 +1243,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
               const SizedBox(width: 8),
               _topPill(
                 'Light ${(proctoring.scanLightingScore.value * 100).round()}%',
-                proctoring.scanLightingScore.value >=
-                    proctoring.minimumScanLightingScore,
+                proctoring.scanLightingScore.value >= _minimumLightingScore,
               ),
               const SizedBox(width: 8),
               _topPill('Rotation', proctoring.scanRotationConfirmed.value),
@@ -1219,9 +1268,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   Widget _reportPage(BuildContext context) {
     final progress = proctoring.scanProgress.value.clamp(0.0, 1.0);
     final passed = scanPassed;
-    final lightOk =
-        proctoring.scanLightingScore.value >=
-        proctoring.minimumScanLightingScore;
+    final lightOk = proctoring.scanLightingScore.value >= _minimumLightingScore;
     final items = proctoring.scanForbiddenObjects.toList();
     final failures = _failedRoomChecks;
     final cs = Theme.of(context).colorScheme;
@@ -1590,11 +1637,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
               _debugChip('scene', latestSceneDiversityScore.toStringAsFixed(3)),
               _debugChip(
                 'target motion',
-                '${targetMotionScore.toStringAsFixed(3)}/${_targetMotionRequired.toStringAsFixed(3)}',
+                '${targetMotionScore.toStringAsFixed(3)}/${scanThresholds.targetMotionRequired.toStringAsFixed(3)}',
               ),
               _debugChip(
                 'moving frames',
-                '$targetMovingFrames/$_targetMovingFramesRequired',
+                '$targetMovingFrames/${scanThresholds.targetMovingFramesRequired}',
               ),
               _debugChip('AI', latestAiSource),
               _debugChip('labels', findings),
