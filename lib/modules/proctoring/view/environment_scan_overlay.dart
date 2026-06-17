@@ -47,6 +47,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   final Set<String> rotationCoverage = <String>{};
   final Set<String> materialCoverage = <String>{};
   final Set<String> environmentFindings = <String>{};
+  final Map<String, List<int>> acceptedSceneSignatures = <String, List<int>>{};
   final CameraObjectSource objectSource = const RustScanCameraObjectSource();
   _GateStepState identityState = _GateStepState.pending;
   _GateStepState audioState = _GateStepState.pending;
@@ -54,19 +55,23 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   _GateStepState finalState = _GateStepState.pending;
 
   static const List<String> _rotationTargets = <String>[
-    'left',
-    'center',
-    'right',
-    'up',
-    'down',
+    'front',
+    'left wall',
+    'back-left corner',
+    'behind / back wall',
+    'back-right corner',
+    'right wall',
+    'ceiling / up',
+    'floor / down',
   ];
   static const List<String> _materialTargets = <String>[
-    'desk',
+    'desk surface',
+    'lap area',
     'walls',
-    'lap',
     'surroundings',
   ];
   static const double _movementThreshold = 0.010;
+  static const double _minimumSceneChangeScore = 0.032;
   static const double _targetMotionRequired = 0.075;
   static const int _targetMovingFramesRequired = 3;
 
@@ -129,7 +134,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       setState(() {
         cameraReady = true;
         statusText =
-            'Camera ready. Start rotating slowly: left, right, up, down, then desk and walls.';
+            'Camera ready. Start at the front, then rotate through each wall, back corners, ceiling, floor, desk, lap, and surroundings.';
       });
       await _startAutomaticRoomScan();
     } catch (e) {
@@ -162,12 +167,12 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     }
     if (!proctoring.scanRotationConfirmed.value) {
       failed.add(
-        '360 room rotation failed. Keep moving the camera through left, center, right, up, and down until all directions are captured.',
+        '360 room rotation failed. Capture front, left wall, back-left corner, behind/back wall, back-right corner, right wall, ceiling, and floor.',
       );
     }
     if (!proctoring.scanUnauthorizedItemsReviewed.value) {
       failed.add(
-        'Unauthorized material scan was not completed. Show the desk, walls, lap, and surrounding room until each area is captured.',
+        'Unauthorized material scan was not completed. Show the desk surface, lap area, walls, and surrounding room until each area is captured.',
       );
     }
     if (proctoring.scanLightingScore.value <
@@ -425,6 +430,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     rotationCoverage.clear();
     materialCoverage.clear();
     environmentFindings.clear();
+    acceptedSceneSignatures.clear();
     frameScanActive = true;
 
     final controller = camera;
@@ -487,6 +493,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
         _registerScanMotion(
           lightingScore: proctoring.scanLightingScore.value,
           movementScore: 0,
+          signature: null,
         );
         return;
       }
@@ -538,6 +545,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     _registerScanMotion(
       lightingScore: _lightingScoreFromLuma(scanLightingAverage),
       movementScore: movement,
+      signature: signature,
     );
   }
 
@@ -623,6 +631,26 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     return (totalDifference / length / 255).clamp(0.0, 1.0);
   }
 
+  double _sceneDiversityScore(List<int> current) {
+    if (acceptedSceneSignatures.isEmpty) return 1.0;
+
+    var bestDifference = 1.0;
+    for (final previous in acceptedSceneSignatures.values) {
+      final length = math.min(previous.length, current.length);
+      if (length == 0) continue;
+
+      var totalDifference = 0;
+      for (var i = 0; i < length; i++) {
+        totalDifference += (current[i] - previous[i]).abs();
+      }
+
+      final difference = (totalDifference / length / 255).clamp(0.0, 1.0);
+      bestDifference = math.min(bestDifference, difference);
+    }
+
+    return bestDifference;
+  }
+
   double _lightingScoreFromLuma(double luma) {
     final distanceFromIdeal = (luma - 0.55).abs();
     return (1 - (distanceFromIdeal * 1.6)).clamp(0.0, 1.0);
@@ -648,6 +676,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   void _registerScanMotion({
     required double lightingScore,
     required double movementScore,
+    required List<int>? signature,
   }) {
     if (!mounted || !cameraReady || cameraFailed || startingExam) return;
 
@@ -669,6 +698,28 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       return;
     }
 
+    if (signature == null) {
+      statusText =
+          'Camera frame could not be read clearly. Move slowly and keep the room visible.';
+      targetMotionScore = 0;
+      targetMovingFrames = 0;
+      _setScanProgressFromCoverage();
+      setState(() {});
+      return;
+    }
+
+    final uniqueSceneScore = _sceneDiversityScore(signature);
+    if (acceptedSceneSignatures.isNotEmpty &&
+        uniqueSceneScore < _minimumSceneChangeScore) {
+      statusText =
+          'This looks like the same area already captured. Rotate further until a different part of the room is visible.';
+      targetMotionScore = 0;
+      targetMovingFrames = 0;
+      _setScanProgressFromCoverage();
+      setState(() {});
+      return;
+    }
+
     targetMotionScore = (targetMotionScore + movementScore).clamp(
       0.0,
       _targetMotionRequired,
@@ -682,6 +733,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       } else {
         materialCoverage.add(target);
       }
+      acceptedSceneSignatures[target] = List<int>.from(signature);
       targetMotionScore = 0;
       targetMovingFrames = 0;
     }
@@ -895,7 +947,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                     '2. 360 room rotation capture',
                     proctoring.scanRotationConfirmed.value,
                     proctoring.scanRotationConfirmed.value
-                        ? 'Left, center, right, up, and down capture completed.'
+                        ? 'Front, side walls, back wall/corners, ceiling, and floor capture completed.'
                         : 'Rotation failed. Rotate the camera around the room again.',
                   ),
                   _reportRow(
@@ -910,7 +962,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                     proctoring.scanUnauthorizedItemsReviewed.value &&
                         items.isEmpty,
                     !proctoring.scanUnauthorizedItemsReviewed.value
-                        ? 'Pending. Show your desk, walls, lap, and surrounding room before this can pass.'
+                        ? 'Pending. Show your desk surface, lap area, walls, and surrounding room before this can pass.'
                         : items.isEmpty
                         ? 'No unauthorized item was reported.'
                         : 'Unauthorized items detected. Remove: ${items.join(', ')}',
