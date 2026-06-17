@@ -13,7 +13,8 @@ class StudentFaceEnrollmentView extends StatefulWidget {
   const StudentFaceEnrollmentView({super.key});
 
   @override
-  State<StudentFaceEnrollmentView> createState() => _StudentFaceEnrollmentViewState();
+  State<StudentFaceEnrollmentView> createState() =>
+      _StudentFaceEnrollmentViewState();
 }
 
 class _StudentFaceEnrollmentViewState extends State<StudentFaceEnrollmentView> {
@@ -110,24 +111,34 @@ class _StudentFaceEnrollmentViewState extends State<StudentFaceEnrollmentView> {
     if (capturing) return;
     setState(() => capturing = true);
 
-    final camera = cameraController;
-    StudentFaceEnrollmentSnapshot next;
-    if (cameraAvailable && camera != null && camera.value.isInitialized) {
-      next = await controller.addCameraSample(
-        CameraFaceEnrollmentSampler(
-          cameraController: camera,
-          connector: connector,
-        ),
-      );
-    } else {
-      next = await controller.addDemoSample();
-    }
+    try {
+      final camera = cameraController;
+      StudentFaceEnrollmentSnapshot next;
+      if (cameraAvailable && camera != null && camera.value.isInitialized) {
+        next = await controller.addCameraSample(
+          CameraFaceEnrollmentSampler(
+            cameraController: camera,
+            connector: connector,
+          ),
+        );
+      } else {
+        next = await controller.addDemoSample();
+      }
 
-    if (!mounted) return;
-    setState(() {
-      snapshot = next;
-      capturing = false;
-    });
+      if (!mounted) return;
+      setState(() {
+        snapshot = next;
+        capturing = false;
+      });
+    } catch (e) {
+      final next = await controller.addDemoSample();
+      if (!mounted) return;
+      setState(() {
+        snapshot = next;
+        capturing = false;
+        cameraError = 'Camera capture failed, so a demo sample was used: $e';
+      });
+    }
   }
 
   @override
@@ -142,9 +153,7 @@ class _StudentFaceEnrollmentViewState extends State<StudentFaceEnrollmentView> {
     final data = snapshot;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Face Enrollment'),
-      ),
+      appBar: AppBar(title: const Text('Face Enrollment')),
       body: loading || data == null
           ? const Center(child: CircularProgressIndicator())
           : Center(
@@ -168,9 +177,8 @@ class _StudentFaceEnrollmentViewState extends State<StudentFaceEnrollmentView> {
                             ? 'Face enrollment active'
                             : 'Register your face for secure exams',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w900,
-                            ),
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w900),
                       ),
                       const SizedBox(height: 10),
                       Text(
@@ -187,17 +195,36 @@ class _StudentFaceEnrollmentViewState extends State<StudentFaceEnrollmentView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _row('Student ID', data.studentId.isEmpty ? 'Not found' : data.studentId),
-                              _row('Required samples', '${data.requiredSamples}'),
-                              _row('Captured samples', '${data.capturedSamples}'),
-                              _row('Enrollment status', data.isComplete ? 'Active' : 'Pending'),
+                              _row(
+                                'Student ID',
+                                data.studentId.isEmpty
+                                    ? 'Not found'
+                                    : data.studentId,
+                              ),
+                              _row(
+                                'Required samples',
+                                '${data.requiredSamples}',
+                              ),
+                              _row(
+                                'Captured samples',
+                                '${data.capturedSamples}',
+                              ),
+                              _row(
+                                'Enrollment status',
+                                data.isComplete ? 'Active' : 'Pending',
+                              ),
                               if (data.lastQualityScore != null)
-                                _row('Last sample quality', '${(data.lastQualityScore! * 100).round()}%'),
+                                _row(
+                                  'Last sample quality',
+                                  '${(data.lastQualityScore! * 100).round()}%',
+                                ),
                               const SizedBox(height: 12),
                               LinearProgressIndicator(
                                 value: data.requiredSamples == 0
                                     ? 0
-                                    : (data.capturedSamples / data.requiredSamples).clamp(0.0, 1.0),
+                                    : (data.capturedSamples /
+                                              data.requiredSamples)
+                                          .clamp(0.0, 1.0),
                                 minHeight: 10,
                                 borderRadius: BorderRadius.circular(999),
                               ),
@@ -207,20 +234,24 @@ class _StudentFaceEnrollmentViewState extends State<StudentFaceEnrollmentView> {
                       ),
                       const SizedBox(height: 20),
                       FilledButton.icon(
-                        onPressed: data.isComplete || capturing ? null : _captureSample,
+                        onPressed: data.isComplete || capturing
+                            ? null
+                            : _captureSample,
                         icon: capturing
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             : const Icon(Icons.camera_alt_rounded),
                         label: Text(
                           data.isComplete
                               ? 'Enrollment completed'
                               : capturing
-                                  ? 'Capturing sample...'
-                                  : 'Capture face sample',
+                              ? 'Capturing sample...'
+                              : 'Capture face sample',
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -248,32 +279,32 @@ class _StudentFaceEnrollmentViewState extends State<StudentFaceEnrollmentView> {
         child: cameraLoading
             ? const Center(child: CircularProgressIndicator())
             : cameraAvailable && camera != null && camera.value.isInitialized
-                ? Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CameraPreview(camera),
-                      Center(
-                        child: Container(
-                          width: 220,
-                          height: 220,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: Colors.green, width: 2),
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Text(
-                        cameraError ?? 'Camera preview is not available.',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  CameraPreview(camera),
+                  Center(
+                    child: Container(
+                      width: 220,
+                      height: 220,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: Colors.green, width: 2),
                       ),
                     ),
                   ),
+                ],
+              )
+            : Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Text(
+                    cameraError ?? 'Camera preview is not available.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ),
       ),
     );
   }

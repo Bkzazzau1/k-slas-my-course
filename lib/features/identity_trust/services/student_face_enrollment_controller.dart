@@ -1,4 +1,5 @@
 import '../../../data/services/student_profile_storage.dart';
+import '../../../data/services/integrity_ledger_service.dart';
 import '../models/student_face_profile.dart';
 import 'camera_face_enrollment_sampler.dart';
 import 'face_embedding_connector.dart';
@@ -33,14 +34,15 @@ class StudentFaceEnrollmentController {
     FaceEmbeddingConnector? connector,
     String? studentId,
     this.requiredSamples = 3,
-  })  : _repository = repository,
-        _enrollmentService = enrollmentService ?? FaceEnrollmentService(),
-        _connector = connector ??
-            StaticFaceEmbeddingConnector(
-              embedding: const <double>[1, 0, 0],
-              version: 'demo-static-face-v1',
-            ),
-        _studentIdOverride = studentId;
+  }) : _repository = repository,
+       _enrollmentService = enrollmentService ?? FaceEnrollmentService(),
+       _connector =
+           connector ??
+           StaticFaceEmbeddingConnector(
+             embedding: const <double>[1, 0, 0],
+             version: 'demo-static-face-v1',
+           ),
+       _studentIdOverride = studentId;
 
   final IdentityTrustRepository _repository;
   final FaceEnrollmentService _enrollmentService;
@@ -55,23 +57,24 @@ class StudentFaceEnrollmentController {
   String? _lastModelVersion;
 
   StudentFaceEnrollmentSnapshot get snapshot => StudentFaceEnrollmentSnapshot(
-        studentId: _studentId,
-        requiredSamples: requiredSamples,
-        capturedSamples: _samples.length,
-        isComplete: _profile?.isActive ?? false,
-        statusText: _statusText,
-        profile: _profile,
-        lastQualityScore: _lastQualityScore,
-      );
+    studentId: _studentId,
+    requiredSamples: requiredSamples,
+    capturedSamples: _samples.length,
+    isComplete: _profile?.isActive ?? false,
+    statusText: _statusText,
+    profile: _profile,
+    lastQualityScore: _lastQualityScore,
+  );
 
   Future<StudentFaceEnrollmentSnapshot> load() async {
-    final studentId = _studentId;
-    if (studentId.isEmpty) {
-      _statusText = 'Student profile is missing. Please login again.';
+    final storedStudentId = _storedStudentId;
+    if (storedStudentId.isEmpty) {
+      _statusText =
+          'Ready to start face enrollment with a local student profile.';
       return snapshot;
     }
 
-    _profile = await _repository.getFaceProfile(studentId);
+    _profile = await _repository.getFaceProfile(storedStudentId);
     if (_profile?.isActive ?? false) {
       _statusText = 'Face enrollment is already active.';
     }
@@ -138,7 +141,8 @@ class StudentFaceEnrollmentController {
     _samples.add(embedding);
     _statusText = 'Sample ${_samples.length} of $requiredSamples captured.';
     if (qualityScore != null) {
-      _statusText = 'Sample ${_samples.length} of $requiredSamples captured. Quality ${(qualityScore * 100).round()}%.';
+      _statusText =
+          'Sample ${_samples.length} of $requiredSamples captured. Quality ${(qualityScore * 100).round()}%.';
     }
 
     if (_samples.length >= requiredSamples) {
@@ -166,6 +170,12 @@ class StudentFaceEnrollmentController {
   }
 
   String get _studentId {
+    final storedStudentId = _storedStudentId;
+    if (storedStudentId.isNotEmpty) return storedStudentId;
+    return IntegrityLedgerService.defaultStudentId;
+  }
+
+  String get _storedStudentId {
     final override = _studentIdOverride?.trim() ?? '';
     if (override.isNotEmpty) return override;
 

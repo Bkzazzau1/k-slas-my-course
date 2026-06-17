@@ -52,17 +52,19 @@ void main() {
     expect(controller.isExamPaused.value, false);
   });
 
-  test('Startup scan timer should not auto-confirm room checks', () async {
-    controller.requestEnvironmentScan('Verify room before exam start.');
+  test(
+    'Startup scan timer should not advance room checks without camera motion',
+    () async {
+      controller.requestEnvironmentScan('Verify room before exam start.');
 
-    await Future<void>.delayed(const Duration(milliseconds: 1500));
+      await Future<void>.delayed(const Duration(milliseconds: 1500));
 
-    expect(controller.scanProgress.value, greaterThan(0));
-    expect(controller.scanProgress.value, lessThanOrEqualTo(0.35));
-    expect(controller.scanRotationConfirmed.value, false);
-    expect(controller.scanUnauthorizedItemsReviewed.value, false);
-    expect(controller.examStartupScanCompleted.value, false);
-  });
+      expect(controller.scanProgress.value, 0);
+      expect(controller.scanRotationConfirmed.value, false);
+      expect(controller.scanUnauthorizedItemsReviewed.value, false);
+      expect(controller.examStartupScanCompleted.value, false);
+    },
+  );
 
   test(
     'Should reject final startup approval until material scan is confirmed',

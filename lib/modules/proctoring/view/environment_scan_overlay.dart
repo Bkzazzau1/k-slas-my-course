@@ -1,8 +1,15 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image/image.dart' as img;
 
+import '../../../features/local_ai/audio_ai/audio_environment_learning_service.dart';
 import '../../../features/local_ai/audio_ai/environment_sound_classifier.dart';
+import '../../../features/local_ai/object_ai/camera_object_source.dart';
+import '../../../features/local_ai/object_ai/rust_scan_camera_object_source.dart';
 import '../controller/proctoring_controller.dart';
 import '../services/environment_identity_trust_gate.dart';
 
@@ -28,10 +35,40 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   String? audioDetail;
   String? connectionDetail;
   String? finalDetail;
+  Timer? stillScanTimer;
+  bool frameScanActive = false;
+  bool analyzingScanFrame = false;
+  bool usingStillCaptureFallback = false;
+  int scanFrameCount = 0;
+  List<int>? previousFrameSignature;
+  double targetMotionScore = 0;
+  int targetMovingFrames = 0;
+  double scanLightingAverage = 0;
+  final Set<String> rotationCoverage = <String>{};
+  final Set<String> materialCoverage = <String>{};
+  final Set<String> environmentFindings = <String>{};
+  final CameraObjectSource objectSource = const RustScanCameraObjectSource();
   _GateStepState identityState = _GateStepState.pending;
   _GateStepState audioState = _GateStepState.pending;
   _GateStepState connectionState = _GateStepState.pending;
   _GateStepState finalState = _GateStepState.pending;
+
+  static const List<String> _rotationTargets = <String>[
+    'left',
+    'center',
+    'right',
+    'up',
+    'down',
+  ];
+  static const List<String> _materialTargets = <String>[
+    'desk',
+    'walls',
+    'lap',
+    'surroundings',
+  ];
+  static const double _movementThreshold = 0.010;
+  static const double _targetMotionRequired = 0.075;
+  static const int _targetMovingFramesRequired = 3;
 
   @override
   void initState() {
@@ -84,7 +121,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
 
       await proctoring.registerEnvironmentFrameAnalysis(
         objectLabels: const <String>[],
-        lightingScore: 1.0,
+        lightingScore: 0,
         rotationCovered: false,
       );
 
@@ -92,8 +129,9 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       setState(() {
         cameraReady = true;
         statusText =
-            'Camera ready. Slowly rotate your device until the scan reaches 100%.';
+            'Camera ready. Start rotating slowly: left, right, up, down, then desk and walls.';
       });
+      await _startAutomaticRoomScan();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -124,12 +162,12 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     }
     if (!proctoring.scanRotationConfirmed.value) {
       failed.add(
-        'Room rotation failed. Rotate the camera around the room until the scan reaches 100%.',
+        '360 room rotation failed. Keep moving the camera through left, center, right, up, and down until all directions are captured.',
       );
     }
     if (!proctoring.scanUnauthorizedItemsReviewed.value) {
       failed.add(
-        'Unauthorized material scan was not completed. Scan your desk, walls, lap, and surrounding room.',
+        'Unauthorized material scan was not completed. Show the desk, walls, lap, and surrounding room until each area is captured.',
       );
     }
     if (proctoring.scanLightingScore.value <
@@ -149,22 +187,36 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   Future<EnvironmentSoundClassification> _learnAudioEnvironment() async {
     setState(() {
       audioState = _GateStepState.running;
-      audioDetail = 'Learning environment sound and identifying sound type...';
-      statusText = 'Learning environment sound and identifying sound type...';
+      audioDetail =
+          'Stay silent. Learning the sound of this environment before classification...';
+      statusText =
+          'Stay silent. Learning the sound of this environment before classification...';
     });
 
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-
-    return const EnvironmentSoundClassifier().classify(
-      EnvironmentSoundObservation(
-        timestamp: DateTime.now(),
-        averageRms: 0.08,
-        peakRms: 0.18,
-        dominantFrequencyHz: 80,
-        spectralCentroidHz: 240,
-        voiceConfidence: 0.05,
-      ),
-    );
+    try {
+      final result = await AudioEnvironmentLearningService().learn(
+        onProgress: (snapshot) {
+          if (!mounted) return;
+          final percent = (snapshot.progress * 100).round();
+          setState(() {
+            audioDetail =
+                '${snapshot.feedback} Learning $percent%. '
+                'Level ${(snapshot.averageRms * 100).round()}%, peak ${(snapshot.peakRms * 100).round()}%, voice ${(snapshot.voiceConfidence * 100).round()}%.';
+            statusText = snapshot.feedback;
+          });
+        },
+      );
+      return result.classification;
+    } catch (e) {
+      return EnvironmentSoundClassification(
+        type: EnvironmentSoundType.unknownNoise,
+        label: 'microphone unavailable',
+        confidence: 0,
+        riskPoints: 25,
+        message:
+            'Microphone audio could not be captured for environment learning: $e',
+      );
+    }
   }
 
   Future<bool> _reviewSystemConnections() async {
@@ -200,14 +252,53 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     if (!scanPassed || startingExam) return;
     setState(() {
       startingExam = true;
-      identityState = _GateStepState.running;
-      audioState = _GateStepState.pending;
+      audioState = _GateStepState.running;
       connectionState = _GateStepState.pending;
+      identityState = _GateStepState.pending;
       finalState = _GateStepState.pending;
-      identityDetail = 'Capturing student image and verifying face identity...';
-      audioDetail = null;
+      audioDetail =
+          'Stay silent. Learning the sound of this environment before classification...';
       connectionDetail = null;
+      identityDetail = null;
       finalDetail = null;
+      statusText =
+          'Stay silent. Learning the sound of this environment before classification...';
+    });
+
+    final sound = await _learnAudioEnvironment();
+    if (!mounted) return;
+    if (!sound.allowedAtExamStart) {
+      proctoring.registerViolation(
+        sound.message,
+        penalty: sound.riskPoints,
+        alert: true,
+      );
+      setState(() {
+        startingExam = false;
+        audioState = _GateStepState.failed;
+        audioDetail =
+            '${sound.message} Sound type: ${sound.label}. Confidence ${(sound.confidence * 100).round()}%.';
+        statusText = sound.message;
+      });
+      return;
+    }
+
+    setState(() {
+      audioState = _GateStepState.passed;
+      audioDetail =
+          '${sound.message} Sound type: ${sound.label}. Confidence ${(sound.confidence * 100).round()}%.';
+    });
+
+    final connectionsOk = await _reviewSystemConnections();
+    if (!mounted) return;
+    if (!connectionsOk) {
+      setState(() => startingExam = false);
+      return;
+    }
+
+    setState(() {
+      identityState = _GateStepState.running;
+      identityDetail = 'Capturing student image and verifying face identity...';
       statusText = 'Capturing student image for identity verification...';
     });
 
@@ -243,35 +334,6 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
           : 'Student image step completed in fallback mode because identity trust is not configured.';
     });
 
-    final sound = await _learnAudioEnvironment();
-    if (!mounted) return;
-    if (!sound.allowedAtExamStart) {
-      proctoring.registerViolation(
-        sound.message,
-        penalty: sound.riskPoints,
-        alert: true,
-      );
-      setState(() {
-        startingExam = false;
-        audioState = _GateStepState.failed;
-        audioDetail = '${sound.message} Sound type: ${sound.label}.';
-        statusText = sound.message;
-      });
-      return;
-    }
-
-    setState(() {
-      audioState = _GateStepState.passed;
-      audioDetail = '${sound.message} Sound type: ${sound.label}.';
-    });
-
-    final connectionsOk = await _reviewSystemConnections();
-    if (!mounted) return;
-    if (!connectionsOk) {
-      setState(() => startingExam = false);
-      return;
-    }
-
     setState(() {
       finalState = _GateStepState.running;
       finalDetail = 'Finalizing exam startup scan...';
@@ -302,6 +364,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   }
 
   Future<void> _retryScan() async {
+    await _stopAutomaticRoomScan();
     proctoring.scanRequired.value = true;
     proctoring.scanInProgress.value = true;
     proctoring.scanProgress.value = 0;
@@ -324,35 +387,6 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     await _openCamera();
   }
 
-  void _confirmRoomRotation() {
-    if (!cameraReady || cameraFailed || startingExam) return;
-    proctoring.scanRotationConfirmed.value = true;
-    if (proctoring.scanProgress.value < 0.40) {
-      proctoring.scanProgress.value = 0.40;
-    }
-    setState(() {
-      statusText =
-          'Rotation confirmed. Now scan your desk, walls, lap, and surrounding room for unauthorized materials.';
-    });
-  }
-
-  void _confirmUnauthorizedMaterialScan() {
-    if (!cameraReady ||
-        cameraFailed ||
-        startingExam ||
-        !proctoring.scanRotationConfirmed.value) {
-      return;
-    }
-    proctoring.scanUnauthorizedItemsReviewed.value = true;
-    if (proctoring.scanProgress.value < 0.75) {
-      proctoring.scanProgress.value = 0.75;
-    }
-    setState(() {
-      statusText =
-          'Unauthorized-material scan confirmed. Finishing room verification before identity, audio, and connection checks.';
-    });
-  }
-
   Future<void> _returnToDashboard() async {
     if (returningDashboard) return;
     setState(() => returningDashboard = true);
@@ -368,6 +402,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   }
 
   Future<void> _disposeCamera() async {
+    await _stopAutomaticRoomScan();
     try {
       await camera?.dispose();
     } catch (_) {}
@@ -378,6 +413,337 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   void dispose() {
     _disposeCamera();
     super.dispose();
+  }
+
+  Future<void> _startAutomaticRoomScan() async {
+    if (!cameraReady || cameraFailed || frameScanActive) return;
+    scanFrameCount = 0;
+    previousFrameSignature = null;
+    targetMotionScore = 0;
+    targetMovingFrames = 0;
+    scanLightingAverage = 0;
+    rotationCoverage.clear();
+    materialCoverage.clear();
+    environmentFindings.clear();
+    frameScanActive = true;
+
+    final controller = camera;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    try {
+      await controller.startImageStream(_onRoomScanFrame);
+    } catch (_) {
+      _startStillCaptureScan();
+    }
+  }
+
+  Future<void> _stopAutomaticRoomScan() async {
+    stillScanTimer?.cancel();
+    stillScanTimer = null;
+    frameScanActive = false;
+    analyzingScanFrame = false;
+    usingStillCaptureFallback = false;
+    final controller = camera;
+    if (controller == null || !controller.value.isInitialized) return;
+    try {
+      if (controller.value.isStreamingImages) {
+        await controller.stopImageStream();
+      }
+    } catch (_) {}
+  }
+
+  void _startStillCaptureScan() {
+    usingStillCaptureFallback = true;
+    stillScanTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      statusText =
+          'Camera stream is limited, so still-frame AI scan is active. Slowly move through each target.';
+    });
+
+    stillScanTimer = Timer.periodic(const Duration(milliseconds: 850), (_) {
+      _captureStillScanFrame();
+    });
+    _captureStillScanFrame();
+  }
+
+  Future<void> _captureStillScanFrame() async {
+    final controller = camera;
+    if (!mounted ||
+        !frameScanActive ||
+        analyzingScanFrame ||
+        scanFinished ||
+        controller == null ||
+        !controller.value.isInitialized) {
+      return;
+    }
+
+    analyzingScanFrame = true;
+    try {
+      final file = await controller.takePicture();
+      final bytes = await file.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) {
+        _registerScanMotion(
+          lightingScore: proctoring.scanLightingScore.value,
+          movementScore: 0,
+        );
+        return;
+      }
+
+      scanFrameCount++;
+      final luma = _averageDecodedLuma(decoded);
+      final signature = _decodedFrameSignature(decoded);
+      _processScanSample(luma: luma, signature: signature);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        statusText =
+            'Still-frame capture failed. Check camera permission and try the room scan again. $e';
+      });
+    } finally {
+      analyzingScanFrame = false;
+    }
+  }
+
+  Future<void> _onRoomScanFrame(CameraImage image) async {
+    if (!mounted || !frameScanActive || analyzingScanFrame || scanFinished) {
+      return;
+    }
+    analyzingScanFrame = true;
+    try {
+      scanFrameCount++;
+      final luma = _averageLuma(image);
+      final signature = _frameSignature(image);
+      if (scanFrameCount % 10 == 0) {
+        await _analyzeEnvironmentObjects(image);
+      }
+      _processScanSample(luma: luma, signature: signature);
+    } finally {
+      analyzingScanFrame = false;
+    }
+  }
+
+  void _processScanSample({
+    required double luma,
+    required List<int> signature,
+  }) {
+    final movement = _frameChangeScore(previousFrameSignature, signature);
+    previousFrameSignature = signature;
+    scanLightingAverage = scanFrameCount <= 1
+        ? luma
+        : ((scanLightingAverage * (scanFrameCount - 1)) + luma) /
+              scanFrameCount;
+
+    _registerScanMotion(
+      lightingScore: _lightingScoreFromLuma(scanLightingAverage),
+      movementScore: movement,
+    );
+  }
+
+  double _averageLuma(CameraImage image) {
+    if (image.planes.isEmpty || image.planes.first.bytes.isEmpty) return 0.5;
+    final bytes = image.planes.first.bytes;
+    final step = math.max(1, bytes.length ~/ 600);
+    var total = 0;
+    var count = 0;
+    for (var i = 0; i < bytes.length; i += step) {
+      total += bytes[i];
+      count++;
+    }
+    if (count == 0) return 0.5;
+    return (total / count / 255).clamp(0.0, 1.0);
+  }
+
+  List<int> _frameSignature(CameraImage image) {
+    if (image.planes.isEmpty || image.planes.first.bytes.isEmpty) {
+      return const <int>[128];
+    }
+    final bytes = image.planes.first.bytes;
+    const buckets = 48;
+    final signature = <int>[];
+    for (var bucket = 0; bucket < buckets; bucket++) {
+      final start = (bytes.length * bucket / buckets).floor();
+      final end = (bytes.length * (bucket + 1) / buckets).floor();
+      if (end <= start) {
+        signature.add(bytes[start.clamp(0, bytes.length - 1)]);
+        continue;
+      }
+      var total = 0;
+      var count = 0;
+      final step = math.max(1, (end - start) ~/ 12);
+      for (var i = start; i < end; i += step) {
+        total += bytes[i];
+        count++;
+      }
+      signature.add(count == 0 ? 128 : (total / count).round());
+    }
+    return signature;
+  }
+
+  double _averageDecodedLuma(img.Image image) {
+    final stepX = math.max(1, image.width ~/ 24);
+    final stepY = math.max(1, image.height ~/ 24);
+    var total = 0.0;
+    var count = 0;
+    for (var y = 0; y < image.height; y += stepY) {
+      for (var x = 0; x < image.width; x += stepX) {
+        final pixel = image.getPixel(x, y);
+        total += (pixel.r * 0.299) + (pixel.g * 0.587) + (pixel.b * 0.114);
+        count++;
+      }
+    }
+    if (count == 0) return 0.5;
+    return (total / count / 255).clamp(0.0, 1.0);
+  }
+
+  List<int> _decodedFrameSignature(img.Image image) {
+    const buckets = 48;
+    final signature = <int>[];
+    for (var bucket = 0; bucket < buckets; bucket++) {
+      final x = ((bucket % 8) + 0.5) * image.width / 8;
+      final y = ((bucket ~/ 8) + 0.5) * image.height / 6;
+      final pixel = image.getPixel(
+        x.floor().clamp(0, image.width - 1),
+        y.floor().clamp(0, image.height - 1),
+      );
+      final luma = (pixel.r * 0.299) + (pixel.g * 0.587) + (pixel.b * 0.114);
+      signature.add(luma.round().clamp(0, 255));
+    }
+    return signature;
+  }
+
+  double _frameChangeScore(List<int>? previous, List<int> current) {
+    if (previous == null || previous.isEmpty || current.isEmpty) return 0;
+    final length = math.min(previous.length, current.length);
+    var totalDifference = 0;
+    for (var i = 0; i < length; i++) {
+      totalDifference += (current[i] - previous[i]).abs();
+    }
+    return (totalDifference / length / 255).clamp(0.0, 1.0);
+  }
+
+  double _lightingScoreFromLuma(double luma) {
+    final distanceFromIdeal = (luma - 0.55).abs();
+    return (1 - (distanceFromIdeal * 1.6)).clamp(0.0, 1.0);
+  }
+
+  Future<void> _analyzeEnvironmentObjects(CameraImage image) async {
+    try {
+      final observations = await objectSource.analyzeFrame(
+        image: image,
+        timestamp: DateTime.now(),
+      );
+      if (observations.isEmpty) return;
+      environmentFindings.addAll(
+        observations
+            .map((observation) => observation.label.trim())
+            .where((label) => label.isNotEmpty),
+      );
+    } catch (_) {
+      // Frame coverage still proceeds when the local detector is unavailable.
+    }
+  }
+
+  void _registerScanMotion({
+    required double lightingScore,
+    required double movementScore,
+  }) {
+    if (!mounted || !cameraReady || cameraFailed || startingExam) return;
+
+    proctoring.registerEnvironmentFrameAnalysis(
+      objectLabels: environmentFindings.toList(growable: false),
+      lightingScore: lightingScore,
+      rotationCovered: rotationCoverage.length == _rotationTargets.length,
+    );
+
+    final target = _currentScanTarget;
+    if (target == null) return;
+
+    if (movementScore < _movementThreshold) {
+      final lightingPercent = (lightingScore * 100).round();
+      statusText =
+          'Light $lightingPercent%. Camera is still. Slowly move the camera to capture $target before scan progress can continue.';
+      _setScanProgressFromCoverage();
+      setState(() {});
+      return;
+    }
+
+    targetMotionScore = (targetMotionScore + movementScore).clamp(
+      0.0,
+      _targetMotionRequired,
+    );
+    targetMovingFrames++;
+
+    if (targetMotionScore >= _targetMotionRequired &&
+        targetMovingFrames >= _targetMovingFramesRequired) {
+      if (rotationCoverage.length < _rotationTargets.length) {
+        rotationCoverage.add(target);
+      } else {
+        materialCoverage.add(target);
+      }
+      targetMotionScore = 0;
+      targetMovingFrames = 0;
+    }
+
+    final rotationCovered = rotationCoverage.length == _rotationTargets.length;
+    final materialCovered = materialCoverage.length == _materialTargets.length;
+
+    _setScanProgressFromCoverage();
+    proctoring.registerEnvironmentFrameAnalysis(
+      objectLabels: environmentFindings.toList(growable: false),
+      lightingScore: lightingScore,
+      rotationCovered: rotationCovered,
+    );
+    proctoring.scanUnauthorizedItemsReviewed.value = materialCovered;
+
+    if (rotationCovered && materialCovered) {
+      proctoring.scanProgress.value = 1.0;
+      statusText = environmentFindings.isEmpty
+          ? 'Automatic AI room scan completed. No unauthorized item was reported.'
+          : 'Automatic AI room scan completed. Review detected item: ${environmentFindings.join(', ')}.';
+      _stopAutomaticRoomScan();
+    } else if (!rotationCovered) {
+      final nextTarget = _rotationTargets[rotationCoverage.length];
+      final mode = usingStillCaptureFallback ? 'still-frame' : 'live-frame';
+      statusText =
+          '360 $mode scan in progress. Slowly move camera to capture $nextTarget.';
+    } else {
+      final nextTarget = _materialTargets[materialCoverage.length];
+      final mode = usingStillCaptureFallback ? 'still-frame' : 'live-frame';
+      statusText =
+          'Rotation captured. $mode scan: slowly move camera to show $nextTarget for AI unauthorized scan.';
+    }
+    setState(() {});
+  }
+
+  String? get _currentScanTarget {
+    if (rotationCoverage.length < _rotationTargets.length) {
+      return _rotationTargets[rotationCoverage.length];
+    }
+    if (materialCoverage.length < _materialTargets.length) {
+      return _materialTargets[materialCoverage.length];
+    }
+    return null;
+  }
+
+  void _setScanProgressFromCoverage() {
+    final targetPartial = (targetMotionScore / _targetMotionRequired).clamp(
+      0.0,
+      1.0,
+    );
+    final rotationUnit = 0.55 / _rotationTargets.length;
+    final materialUnit = 0.45 / _materialTargets.length;
+    final partial = rotationCoverage.length < _rotationTargets.length
+        ? targetPartial * rotationUnit
+        : materialCoverage.length < _materialTargets.length
+        ? targetPartial * materialUnit
+        : 0.0;
+    final progress =
+        (rotationCoverage.length * rotationUnit) +
+        (materialCoverage.length * materialUnit) +
+        partial;
+    proctoring.scanProgress.value = progress.clamp(0.0, 1.0);
   }
 
   @override
@@ -526,10 +892,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                         : (failureText ?? 'Camera access failed.'),
                   ),
                   _reportRow(
-                    '2. Room rotation',
+                    '2. 360 room rotation capture',
                     proctoring.scanRotationConfirmed.value,
                     proctoring.scanRotationConfirmed.value
-                        ? 'Rotation completed.'
+                        ? 'Left, center, right, up, and down capture completed.'
                         : 'Rotation failed. Rotate the camera around the room again.',
                   ),
                   _reportRow(
@@ -540,11 +906,11 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                         : 'Lighting failed. Move to a brighter room or switch on more light.',
                   ),
                   _reportRow(
-                    '4. Unauthorized item check',
+                    '4. AI unauthorized item scan',
                     proctoring.scanUnauthorizedItemsReviewed.value &&
                         items.isEmpty,
                     !proctoring.scanUnauthorizedItemsReviewed.value
-                        ? 'Pending. Scan your desk, walls, lap, and surrounding room before this can pass.'
+                        ? 'Pending. Show your desk, walls, lap, and surrounding room before this can pass.'
                         : items.isEmpty
                         ? 'No unauthorized item was reported.'
                         : 'Unauthorized items detected. Remove: ${items.join(', ')}',
@@ -555,22 +921,22 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                     'Identity, audio, connections, and final approval',
                   ),
                   _stepRow(
-                    '5. Capture student image and verify face',
-                    identityState,
-                    identityDetail ??
-                        'Pending. This runs after the room checks pass.',
-                  ),
-                  _stepRow(
-                    '6. Audio environment learning and sound type',
+                    '5. Audio environment learning and sound type',
                     audioState,
                     audioDetail ??
                         'Pending. The app learns room sound and identifies noise type.',
                   ),
                   _stepRow(
-                    '7. System connection review',
+                    '6. System connection review',
                     connectionState,
                     connectionDetail ??
                         'Pending. System connections are reviewed before final start.',
+                  ),
+                  _stepRow(
+                    '7. Capture student image and verify face',
+                    identityState,
+                    identityDetail ??
+                        'Pending. This runs after audio and system checks pass.',
                   ),
                   _stepRow(
                     '8. Final exam startup approval',
@@ -698,30 +1064,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
             ),
           ),
           const SizedBox(height: 12),
-          if (cameraReady && !proctoring.scanRotationConfirmed.value) ...[
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: startingExam ? null : _confirmRoomRotation,
-                icon: const Icon(Icons.rotate_90_degrees_ccw_rounded),
-                label: const Text('I have rotated the camera around the room'),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ] else if (cameraReady &&
-              !proctoring.scanUnauthorizedItemsReviewed.value) ...[
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: startingExam
-                    ? null
-                    : _confirmUnauthorizedMaterialScan,
-                icon: const Icon(Icons.fact_check_rounded),
-                label: const Text('I scanned for unauthorized materials'),
-              ),
-            ),
-            const SizedBox(height: 8),
-          ],
+          _coveragePanel(),
+          const SizedBox(height: 10),
           OutlinedButton.icon(
             onPressed: returningDashboard ? null : _returnToDashboard,
             style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
@@ -732,6 +1076,124 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _coveragePanel() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _coverageGroup(
+          title: '360 rotation capture',
+          icon: Icons.threesixty_rounded,
+          targets: _rotationTargets,
+          covered: rotationCoverage,
+        ),
+        const SizedBox(height: 8),
+        _coverageGroup(
+          title: 'AI unauthorized scan',
+          icon: Icons.manage_search_rounded,
+          targets: _materialTargets,
+          covered: materialCoverage,
+        ),
+        if (environmentFindings.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orangeAccent),
+            ),
+            child: Text(
+              'Detected item: ${environmentFindings.join(', ')}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _coverageGroup({
+    required String title,
+    required IconData icon,
+    required List<String> targets,
+    required Set<String> covered,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 6),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: targets
+              .map((target) {
+                final captured = covered.contains(target);
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: captured
+                        ? Colors.green.withValues(alpha: 0.28)
+                        : Colors.white.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: captured
+                          ? Colors.greenAccent
+                          : Colors.white.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        captured
+                            ? Icons.check_circle_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        size: 14,
+                        color: captured
+                            ? Colors.greenAccent
+                            : Colors.white.withValues(alpha: 0.72),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        target,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              })
+              .toList(growable: false),
+        ),
+      ],
     );
   }
 

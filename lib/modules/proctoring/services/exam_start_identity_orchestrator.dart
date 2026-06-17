@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 
+import '../../../data/services/integrity_ledger_service.dart';
 import '../../../data/services/student_profile_storage.dart';
 import '../../../features/identity_trust/identity_trust.dart';
 
@@ -82,6 +83,6 @@ class ExamStartIdentityOrchestrator {
     final email = profile?.email?.trim() ?? '';
     if (email.isNotEmpty) return email;
 
-    return '';
+    return IntegrityLedgerService.defaultStudentId;
   }
 }

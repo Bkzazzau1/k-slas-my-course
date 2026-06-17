@@ -1,4 +1,5 @@
 export 'audio_ai/audio_baseline_service.dart';
+export 'audio_ai/audio_environment_learning_service.dart';
 export 'audio_ai/audio_readiness_service.dart';
 export 'audio_ai/voice_activity_detector.dart';
 export 'camera_ai/camera_face_source.dart';

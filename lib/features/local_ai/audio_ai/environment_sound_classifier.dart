@@ -8,6 +8,8 @@ enum EnvironmentSoundType {
   humanVoice,
   multipleVoices,
   phoneRingtone,
+  suddenSharpNoise,
+  continuousBackgroundNoise,
   unknownNoise,
 }
 
@@ -51,12 +53,12 @@ class EnvironmentSoundClassification {
   bool get allowedAtExamStart => riskPoints < 25;
 
   Map<String, Object?> toJson() => <String, Object?>{
-        'type': type.name,
-        'label': label,
-        'confidence': confidence,
-        'riskPoints': riskPoints,
-        'message': message,
-      };
+    'type': type.name,
+    'label': label,
+    'confidence': confidence,
+    'riskPoints': riskPoints,
+    'message': message,
+  };
 
   LocalAiEvent toEvent({String? sessionId, String? studentId}) {
     return LocalAiEvent(
@@ -119,6 +121,19 @@ class EnvironmentSoundClassifier {
       );
     }
 
+    if (input.spectralCentroidHz >= 2200 &&
+        input.peakRms >= 0.55 &&
+        input.averageRms < 0.30) {
+      return const EnvironmentSoundClassification(
+        type: EnvironmentSoundType.suddenSharpNoise,
+        label: 'sudden sharp noise',
+        confidence: 0.74,
+        riskPoints: 15,
+        message:
+            'Sudden sharp sound detected. Keep the environment stable before starting.',
+      );
+    }
+
     if (input.dominantFrequencyHz >= 30 &&
         input.dominantFrequencyHz <= 180 &&
         input.spectralCentroidHz < 500 &&
@@ -128,7 +143,22 @@ class EnvironmentSoundClassifier {
         label: 'fan or air conditioner',
         confidence: 0.72,
         riskPoints: 0,
-        message: 'Fan or air conditioner noise detected and accepted as background sound.',
+        message:
+            'Fan or air conditioner noise detected and accepted as background sound.',
+      );
+    }
+
+    if (input.averageRms >= 0.12 &&
+        input.averageRms <= 0.32 &&
+        input.peakRms <= 0.45 &&
+        input.voiceConfidence < 0.45) {
+      return const EnvironmentSoundClassification(
+        type: EnvironmentSoundType.continuousBackgroundNoise,
+        label: 'continuous background noise',
+        confidence: 0.66,
+        riskPoints: 5,
+        message:
+            'Continuous background sound detected and saved as the room baseline.',
       );
     }
 
@@ -171,7 +201,8 @@ class EnvironmentSoundClassifier {
       label: 'unknown environmental noise',
       confidence: 0.55,
       riskPoints: input.peakRms > 0.70 ? 20 : 10,
-      message: 'Unknown environmental sound detected. Keep the room quiet before starting.',
+      message:
+          'Unknown environmental sound detected. Keep the room quiet before starting.',
     );
   }
 }
