@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image/image.dart' as img;
 
+import '../../../data/services/exam_proctoring_backend_service.dart';
 import '../../../features/local_ai/audio_ai/audio_environment_learning_service.dart';
 import '../../../features/local_ai/audio_ai/environment_sound_classifier.dart';
 import '../../../features/local_ai/object_ai/camera_object_source.dart';
@@ -14,6 +15,29 @@ import '../controller/proctoring_controller.dart';
 import '../services/environment_identity_trust_gate.dart';
 
 enum _GateStepState { pending, running, passed, failed }
+
+enum ExamRoomEnvironmentType {
+  privateIndoorRoom,
+  openOutdoorSpace,
+  publicSharedSpace,
+  vehicle,
+  darkRoom,
+  unknown,
+}
+
+class EnvironmentSuitabilityDecision {
+  const EnvironmentSuitabilityDecision({
+    required this.type,
+    required this.allowed,
+    required this.message,
+    required this.severity,
+  });
+
+  final ExamRoomEnvironmentType type;
+  final bool allowed;
+  final String message;
+  final String severity;
+}
 
 class EnvironmentScanOverlay extends StatefulWidget {
   const EnvironmentScanOverlay({super.key});
@@ -44,9 +68,13 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
   double targetMotionScore = 0;
   int targetMovingFrames = 0;
   double scanLightingAverage = 0;
+  bool scanCompletionReviewed = false;
+  bool environmentAlertReported = false;
   final Set<String> rotationCoverage = <String>{};
   final Set<String> materialCoverage = <String>{};
   final Set<String> environmentFindings = <String>{};
+  final Set<String> reportedForbiddenLabels = <String>{};
+  final Map<String, String> environmentFindingTargets = <String, String>{};
   final Map<String, List<int>> acceptedSceneSignatures = <String, List<int>>{};
   final CameraObjectSource objectSource = const RustScanCameraObjectSource();
   _GateStepState identityState = _GateStepState.pending;
@@ -157,7 +185,8 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
         proctoring.scanUnauthorizedItemsReviewed.value &&
         proctoring.scanLightingScore.value >=
             proctoring.minimumScanLightingScore &&
-        proctoring.scanForbiddenObjects.isEmpty;
+        proctoring.scanForbiddenObjects.isEmpty &&
+        _currentEnvironmentDecision.allowed;
   }
 
   List<String> get _failedRoomChecks {
@@ -185,6 +214,10 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       failed.add(
         'Unauthorized item check failed. Remove: ${proctoring.scanForbiddenObjects.join(', ')}.',
       );
+    }
+    final environmentDecision = _currentEnvironmentDecision;
+    if (!environmentDecision.allowed) {
+      failed.add(environmentDecision.message);
     }
     return failed;
   }
@@ -427,9 +460,13 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     targetMotionScore = 0;
     targetMovingFrames = 0;
     scanLightingAverage = 0;
+    scanCompletionReviewed = false;
+    environmentAlertReported = false;
     rotationCoverage.clear();
     materialCoverage.clear();
     environmentFindings.clear();
+    reportedForbiddenLabels.clear();
+    environmentFindingTargets.clear();
     acceptedSceneSignatures.clear();
     frameScanActive = true;
 
@@ -663,14 +700,219 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
         timestamp: DateTime.now(),
       );
       if (observations.isEmpty) return;
-      environmentFindings.addAll(
-        observations
-            .map((observation) => observation.label.trim())
-            .where((label) => label.isNotEmpty),
-      );
+      final scanTarget = _currentScanTarget ?? 'startup room scan';
+      for (final observation in observations) {
+        final label = observation.label.trim();
+        if (label.isEmpty) continue;
+        environmentFindings.add(label);
+        environmentFindingTargets[label] = scanTarget;
+      }
     } catch (_) {
       // Frame coverage still proceeds when the local detector is unavailable.
     }
+  }
+
+  Future<void> _reportScanAlertToBackend({
+    required String eventType,
+    required String message,
+    required String severity,
+    required Map<String, dynamic> evidence,
+  }) async {
+    await ExamProctoringBackendService.recordProctoringAlert(
+      eventType: eventType,
+      message: message,
+      severity: severity,
+      integrityScore: proctoring.integrityScore.value,
+      evidence: evidence,
+    );
+  }
+
+  Future<void> _handleForbiddenScanFindings({
+    required List<String> labels,
+    required String scanTarget,
+  }) async {
+    final newLabels = labels
+        .where((label) => !reportedForbiddenLabels.contains(label))
+        .toList(growable: false);
+    if (newLabels.isEmpty) return;
+
+    reportedForbiddenLabels.addAll(newLabels);
+    final message =
+        'Possible unauthorized item detected: ${newLabels.join(', ')}. Remove it and rescan before the exam can start.';
+
+    proctoring.registerViolation(
+      message,
+      penalty: 25,
+      alert: true,
+      eventType: 'forbiddenItemDetected',
+      severity: 'high',
+      confidence: 0.80,
+      metadata: <String, Object?>{
+        'labels': newLabels,
+        'scanTarget': scanTarget,
+        'source': 'startup_room_scan',
+        'lightingScore': proctoring.scanLightingScore.value,
+        'scanProgress': proctoring.scanProgress.value,
+      },
+    );
+
+    await _reportScanAlertToBackend(
+      eventType: 'forbidden_item_detected',
+      message: message,
+      severity: 'high',
+      evidence: <String, dynamic>{
+        'labels': newLabels,
+        'scan_target': scanTarget,
+        'environment_type': _currentEnvironmentDecision.type.name,
+        'lighting_score': proctoring.scanLightingScore.value,
+        'scan_progress': proctoring.scanProgress.value,
+        'source': 'startup_room_scan',
+      },
+    );
+
+    if (!mounted) return;
+    setState(() {
+      statusText =
+          '$message This event has been recorded for exam integrity review.';
+    });
+  }
+
+  Future<void> _handleEnvironmentSuitability(
+    EnvironmentSuitabilityDecision decision,
+  ) async {
+    if (decision.allowed || environmentAlertReported) return;
+    environmentAlertReported = true;
+
+    proctoring.registerViolation(
+      decision.message,
+      penalty: decision.severity == 'high' ? 25 : 15,
+      alert: true,
+      eventType: 'environmentNotSuitable',
+      severity: decision.severity,
+      confidence: 0.75,
+      metadata: <String, Object?>{
+        'environmentType': decision.type.name,
+        'labels': environmentFindings.toList(growable: false),
+        'lightingScore': proctoring.scanLightingScore.value,
+        'source': 'startup_room_scan',
+      },
+    );
+
+    await _reportScanAlertToBackend(
+      eventType: 'environment_not_suitable',
+      message: decision.message,
+      severity: decision.severity,
+      evidence: <String, dynamic>{
+        'environment_type': decision.type.name,
+        'labels': environmentFindings.toList(growable: false),
+        'lighting_score': proctoring.scanLightingScore.value,
+        'source': 'startup_room_scan',
+      },
+    );
+  }
+
+  EnvironmentSuitabilityDecision get _currentEnvironmentDecision {
+    return _classifyEnvironment(
+      labels: environmentFindings.toList(growable: false),
+      lightingScore: proctoring.scanLightingScore.value,
+    );
+  }
+
+  EnvironmentSuitabilityDecision _classifyEnvironment({
+    required List<String> labels,
+    required double lightingScore,
+  }) {
+    final lower = labels.map((label) => label.toLowerCase()).toList();
+
+    if (lightingScore < proctoring.minimumScanLightingScore) {
+      return const EnvironmentSuitabilityDecision(
+        type: ExamRoomEnvironmentType.darkRoom,
+        allowed: false,
+        severity: 'medium',
+        message:
+            'Lighting is too low for exam monitoring. Move to a brighter room or switch on more light.',
+      );
+    }
+
+    final vehicleHints = <String>['car', 'vehicle', 'bus', 'taxi'];
+    if (vehicleHints.any(
+      (hint) => lower.any((label) => label.contains(hint)),
+    )) {
+      return const EnvironmentSuitabilityDecision(
+        type: ExamRoomEnvironmentType.vehicle,
+        allowed: false,
+        severity: 'high',
+        message:
+            'Vehicle environment detected. This environment is not acceptable for this exam. Move to a private, quiet room and rescan.',
+      );
+    }
+
+    final outdoorHints = <String>['road', 'street', 'outdoor'];
+    if (outdoorHints.any(
+      (hint) => lower.any((label) => label.contains(hint)),
+    )) {
+      return const EnvironmentSuitabilityDecision(
+        type: ExamRoomEnvironmentType.openOutdoorSpace,
+        allowed: false,
+        severity: 'high',
+        message:
+            'Open outdoor environment detected. This environment is not acceptable for this exam. Move to a private, quiet room and rescan.',
+      );
+    }
+
+    final publicHints = <String>[
+      'market',
+      'shop',
+      'restaurant',
+      'cafe',
+      'crowd',
+      'multiple person',
+      'multiple people',
+      'person group',
+      'corridor',
+      'classroom',
+    ];
+    if (publicHints.any((hint) => lower.any((label) => label.contains(hint)))) {
+      return const EnvironmentSuitabilityDecision(
+        type: ExamRoomEnvironmentType.publicSharedSpace,
+        allowed: false,
+        severity: 'high',
+        message:
+            'Open or public environment detected. This environment is not acceptable for this exam. Move to a private, quiet room and rescan.',
+      );
+    }
+
+    return const EnvironmentSuitabilityDecision(
+      type: ExamRoomEnvironmentType.privateIndoorRoom,
+      allowed: true,
+      severity: 'low',
+      message:
+          'Environment detected: private indoor room. This is acceptable for the exam.',
+    );
+  }
+
+  List<String> _forbiddenScanLabels(List<String> labels) {
+    return labels
+        .where((label) {
+          final lower = label.toLowerCase();
+          return lower.contains('phone') ||
+              lower.contains('mobile') ||
+              lower.contains('paper') ||
+              lower.contains('book') ||
+              lower.contains('note') ||
+              lower.contains('second monitor') ||
+              lower.contains('tablet') ||
+              lower.contains('earpiece') ||
+              lower.contains('headphone') ||
+              lower.contains('earphone') ||
+              lower.contains('calculator') ||
+              lower.contains('another person') ||
+              lower.contains('multiple person') ||
+              lower.contains('multiple people') ||
+              lower.contains('screen') ||
+              lower.contains('television');
+        })
+        .toList(growable: false);
   }
 
   void _registerScanMotion({
@@ -754,6 +996,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
       statusText = environmentFindings.isEmpty
           ? 'Automatic AI room scan completed. No unauthorized item was reported.'
           : 'Automatic AI room scan completed. Review detected item: ${environmentFindings.join(', ')}.';
+      unawaited(_reviewCompletedRoomScan());
       _stopAutomaticRoomScan();
     } else if (!rotationCovered) {
       final nextTarget = _rotationTargets[rotationCoverage.length];
@@ -767,6 +1010,36 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
           'Rotation captured. $mode scan: slowly move camera to show $nextTarget for AI unauthorized scan.';
     }
     setState(() {});
+  }
+
+  Future<void> _reviewCompletedRoomScan() async {
+    if (scanCompletionReviewed) return;
+    scanCompletionReviewed = true;
+
+    final labels = environmentFindings.toList(growable: false);
+    final forbiddenLabels = _forbiddenScanLabels(labels);
+    if (forbiddenLabels.isNotEmpty) {
+      final targets = forbiddenLabels
+          .map((label) => environmentFindingTargets[label])
+          .whereType<String>()
+          .toSet()
+          .join(', ');
+      await _handleForbiddenScanFindings(
+        labels: forbiddenLabels,
+        scanTarget: targets.isEmpty ? 'startup room scan' : targets,
+      );
+    }
+
+    final environmentDecision = _currentEnvironmentDecision;
+    await _handleEnvironmentSuitability(environmentDecision);
+    if (!mounted) return;
+    if (forbiddenLabels.isEmpty) {
+      setState(() {
+        statusText = environmentDecision.allowed
+            ? environmentDecision.message
+            : environmentDecision.message;
+      });
+    }
   }
 
   String? get _currentScanTarget {
@@ -869,6 +1142,7 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
     final items = proctoring.scanForbiddenObjects.toList();
     final failures = _failedRoomChecks;
     final cs = Theme.of(context).colorScheme;
+    final environmentDecision = _currentEnvironmentDecision;
 
     return SafeArea(
       child: Center(
@@ -967,31 +1241,38 @@ class _EnvironmentScanOverlayState extends State<EnvironmentScanOverlay> {
                         ? 'No unauthorized item was reported.'
                         : 'Unauthorized items detected. Remove: ${items.join(', ')}',
                   ),
+                  _reportRow(
+                    '5. Environment suitability',
+                    environmentDecision.allowed,
+                    environmentDecision.allowed
+                        ? '${environmentDecision.message} Status: acceptable.'
+                        : environmentDecision.message,
+                  ),
                   if (failures.isNotEmpty) _failurePanel(failures),
                   const SizedBox(height: 8),
                   _sectionTitle(
                     'Identity, audio, connections, and final approval',
                   ),
                   _stepRow(
-                    '5. Audio environment learning and sound type',
+                    '6. Audio environment learning and sound type',
                     audioState,
                     audioDetail ??
                         'Pending. The app learns room sound and identifies noise type.',
                   ),
                   _stepRow(
-                    '6. System connection review',
+                    '7. System connection review',
                     connectionState,
                     connectionDetail ??
                         'Pending. System connections are reviewed before final start.',
                   ),
                   _stepRow(
-                    '7. Capture student image and verify face',
+                    '8. Capture student image and verify face',
                     identityState,
                     identityDetail ??
                         'Pending. This runs after audio and system checks pass.',
                   ),
                   _stepRow(
-                    '8. Final exam startup approval',
+                    '9. Final exam startup approval',
                     finalState,
                     finalDetail ??
                         'Pending. Exam opens only after all checks pass.',

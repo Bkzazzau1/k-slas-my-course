@@ -448,8 +448,14 @@ class ProctoringController extends GetxController with WidgetsBindingObserver {
               lower.contains('monitor') ||
               lower.contains('screen') ||
               lower.contains('television') ||
+              lower.contains('tv') ||
+              lower.contains('earpiece') ||
               lower.contains('headphone') ||
               lower.contains('earphone') ||
+              lower.contains('calculator') ||
+              lower.contains('another person') ||
+              lower.contains('multiple person') ||
+              lower.contains('multiple people') ||
               lower.contains('book') ||
               lower.contains('paper') ||
               lower.contains('note');
