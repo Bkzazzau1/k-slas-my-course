@@ -9,10 +9,14 @@ import '../data/services/storage_service.dart';
 class StudentAIApp extends StatelessWidget {
   const StudentAIApp({super.key});
 
+  static const _demoExamFaceOnly = bool.fromEnvironment(
+    'KSLAS_DEMO_EXAM_FACE_ONLY',
+  );
+
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'K-SLAS',
+      title: _demoExamFaceOnly ? 'K-SLAS Exam Demo' : 'K-SLAS',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
@@ -20,7 +24,9 @@ class StudentAIApp extends StatelessWidget {
           ? ThemeMode.dark
           : ThemeMode.light,
       getPages: AppPages.pages,
-      initialRoute: Routes.mainNav,
+      initialRoute: _demoExamFaceOnly
+          ? Routes.demoExamFaceOnly
+          : Routes.mainNav,
     );
   }
 }
