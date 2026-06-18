@@ -20,6 +20,7 @@ import '../../modules/courses/view/student_academic_record_view.dart';
 import '../../features/dashboard/binding/dashboard_binding.dart';
 import '../../features/dashboard/controller/dashboard_controller.dart';
 import '../../features/dashboard/view/dashboard_view.dart';
+import '../../modules/demo_exam_face/view/demo_exam_face_only_view.dart';
 import '../../modules/demo_walkthrough/view/demo_walkthrough_view.dart';
 import '../../modules/exam/binding/exam_binding.dart';
 import '../../modules/exam/view/exam_result_view.dart';
@@ -83,6 +84,14 @@ class AppPages {
     GetPage(
       name: Routes.demoWalkthrough,
       page: () => const DemoWalkthroughView(),
+    ),
+    GetPage(
+      name: Routes.demoExamFaceOnly,
+      page: () => const DemoExamFaceOnlyView(),
+      binding: BindingsBuilder(() {
+        ExamBinding().dependencies();
+        IdentityTrustBootstrap.register();
+      }),
     ),
     GetPage(
       name: Routes.courses,
