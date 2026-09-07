@@ -56,15 +56,29 @@ class _LiveExamCameraMonitorHostState extends State<LiveExamCameraMonitorHost>
             : Get.put(ProctoringController(), permanent: true));
 
     if (widget.enabled) {
-      _armedSubscription = _proctoring.examMonitoringArmed.listen((armed) {
-        if (armed) {
-          unawaited(_ensureMonitoringActive());
-        }
-      });
+      _startArmedListener();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_ensureMonitoringActive());
       });
     }
+  }
+
+  void _startArmedListener() {
+    if (_armedSubscription != null) return;
+    _armedSubscription = _proctoring.examMonitoringArmed.listen((armed) {
+      if (armed) {
+        unawaited(_ensureMonitoringActive());
+      } else {
+        _retryTimer?.cancel();
+        unawaited(_runtime?.stop());
+      }
+    });
+  }
+
+  void _stopArmedListener() {
+    final subscription = _armedSubscription;
+    _armedSubscription = null;
+    if (subscription != null) unawaited(subscription.cancel());
   }
 
   @override
@@ -73,9 +87,11 @@ class _LiveExamCameraMonitorHostState extends State<LiveExamCameraMonitorHost>
     if (oldWidget.enabled == widget.enabled) return;
     if (!widget.enabled) {
       _retryTimer?.cancel();
+      _stopArmedListener();
       unawaited(_runtime?.stop());
       return;
     }
+    _startArmedListener();
     unawaited(_ensureMonitoringActive());
   }
 
@@ -162,7 +178,7 @@ class _LiveExamCameraMonitorHostState extends State<LiveExamCameraMonitorHost>
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
     _retryTimer?.cancel();
-    _armedSubscription?.cancel();
+    _stopArmedListener();
     unawaited(_runtime?.stop());
     super.dispose();
   }
