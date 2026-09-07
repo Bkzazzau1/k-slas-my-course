@@ -25,8 +25,16 @@ class LocalAiCameraBinding {
   LocalAiEngine? _engine;
   LocalAiCameraMonitor? _monitor;
   LocalAiProctoringAdapter? _adapter;
+  CameraController? _cameraController;
 
-  bool get isActive => _monitor?.isRunning ?? false;
+  bool get isActive {
+    final controller = _cameraController;
+    return (_monitor?.isRunning ?? false) &&
+        controller != null &&
+        controller.value.isInitialized &&
+        controller.value.isStreamingImages;
+  }
+
   LocalAiEngine? get engine => _engine;
 
   Future<void> attach(CameraController controller) async {
@@ -55,6 +63,7 @@ class LocalAiCameraBinding {
       onFrameAvailable: frameEvidenceProvider.rememberFrame,
     );
 
+    _cameraController = controller;
     _engine = engine;
     _adapter = adapter;
     _monitor = monitor;
@@ -63,11 +72,18 @@ class LocalAiCameraBinding {
 
     try {
       await monitor.start();
-    } catch (e) {
+    } catch (_) {
+      await detach();
       proctoringController.registerViolation(
-        'Local AI camera monitoring could not start: $e',
+        'Camera monitoring could not start. Please check camera access.',
         penalty: 0,
         alert: false,
+        eventType: 'camera_monitoring_unavailable',
+        severity: 'warning',
+        metadata: const <String, Object?>{
+          'source': 'local_exam_camera',
+          'monitoring_state': 'unavailable',
+        },
       );
     }
   }
@@ -86,5 +102,6 @@ class LocalAiCameraBinding {
     _monitor = null;
     _adapter = null;
     _engine = null;
+    _cameraController = null;
   }
 }
