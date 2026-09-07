@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../data/services/integrity_event_writer.dart';
 import '../controller/proctoring_controller.dart';
 import '../services/live_exam_camera_runtime.dart';
 
@@ -137,25 +138,41 @@ class _LiveExamCameraMonitorHostState extends State<LiveExamCameraMonitorHost>
       return;
     }
 
-    _reportMonitoringIssue();
+    await _reportMonitoringIssue();
     _scheduleRetry();
   }
 
-  void _reportMonitoringIssue() {
+  Future<void> _reportMonitoringIssue() async {
     if (_monitoringIssueReported) return;
     _monitoringIssueReported = true;
 
-    _proctoring.registerViolation(
-      'Camera monitoring is unavailable. Please check camera access and keep the camera connected.',
-      penalty: 0,
-      alert: true,
-      eventType: 'camera_monitoring_unavailable',
-      severity: 'high',
-      metadata: const <String, Object?>{
-        'source': 'live_exam_runtime',
-        'monitoring_state': 'unavailable',
-      },
-    );
+    const message =
+        'Camera monitoring is unavailable. Please check camera access and keep the camera connected.';
+    try {
+      final profile = await IntegrityEventWriter.write(
+        studentId: _proctoring.activeStudentId.value,
+        sessionId: _proctoring.activeSessionId.value,
+        reason: message,
+        points: 0,
+        level: _proctoring.currentLevel.value?.name,
+        scoreAfter: _proctoring.integrityScore.value,
+        strikesAfter: _proctoring.strictViolationStrikes.value,
+        tier: _proctoring.riskTier.value,
+        riskAfter: _proctoring.cumulativeRiskScore.value,
+        type: 'camera_monitoring_unavailable',
+        severity: 'high',
+        alert: true,
+        data: const <String, Object?>{
+          'source': 'live_exam_runtime',
+          'monitoring_state': 'unavailable',
+          'technical_condition': true,
+        },
+      );
+      _proctoring.pendingLedgerSyncCount.value = profile.unsyncedLedgerCount;
+    } catch (_) {
+      // Correction must still happen even if the local ledger is temporarily
+      // unavailable. The retry path will attempt monitoring again.
+    }
 
     if (!_proctoring.scanRequired.value &&
         !_proctoring.scanInProgress.value &&
