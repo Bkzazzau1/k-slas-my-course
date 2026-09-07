@@ -4,6 +4,7 @@ import 'package:my_courses/modules/fill_blank/view/fill_blank_view.dart';
 import 'package:my_courses/modules/assignments/binding/assignments_binding.dart';
 import 'package:my_courses/modules/assignments/view/assignments_pro_view.dart';
 
+import '../../data/models/exam_models.dart';
 import '../../features/identity_trust/services/identity_trust_bootstrap.dart';
 import '../../features/identity_trust/view/student_face_enrollment_view.dart';
 import '../../modules/cbt/binding/cbt_binding.dart';
@@ -33,6 +34,7 @@ import '../../modules/practice/binding/practice_binding.dart';
 import '../../modules/practice/view/practice_result_view.dart';
 import '../../modules/practice/view/practice_session_view.dart';
 import '../../modules/practice/view/practice_setup_view.dart';
+import '../../modules/proctoring/view/live_exam_camera_monitor_host.dart';
 import '../../modules/revision/binding/revision_binding.dart';
 import '../../modules/revision/controller/revision_controller.dart';
 import '../../modules/revision/view/revision_view.dart';
@@ -230,7 +232,16 @@ class AppPages {
       page: () => const ExamSetupView(),
       binding: ExamBinding(),
     ),
-    GetPage(name: Routes.examRun, page: () => const ExamRunView()),
+    GetPage(
+      name: Routes.examRun,
+      page: () {
+        final cfg = Get.arguments as ExamConfig;
+        return LiveExamCameraMonitorHost(
+          enabled: cfg.isGraded && cfg.isRemoteProctored,
+          child: const ExamRunView(),
+        );
+      },
+    ),
     GetPage(name: Routes.examResult, page: () => const ExamResultView()),
     GetPage(
       name: Routes.liveSessions,
