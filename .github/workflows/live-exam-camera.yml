@@ -1,0 +1,62 @@
+name: Live Exam Camera Monitoring
+
+on:
+  pull_request:
+    paths:
+      - 'lib/app/routes/app_pages.dart'
+      - 'lib/modules/proctoring/services/local_ai_camera_binding.dart'
+      - 'lib/modules/proctoring/services/live_exam_camera_runtime.dart'
+      - 'lib/modules/proctoring/view/live_exam_camera_monitor_host.dart'
+      - 'test/modules/proctoring/live_exam_camera_monitor_host_test.dart'
+      - '.github/workflows/live-exam-camera.yml'
+  push:
+    branches:
+      - 'edge-ai/live-exam-local-camera'
+    paths:
+      - 'lib/app/routes/app_pages.dart'
+      - 'lib/modules/proctoring/services/local_ai_camera_binding.dart'
+      - 'lib/modules/proctoring/services/live_exam_camera_runtime.dart'
+      - 'lib/modules/proctoring/view/live_exam_camera_monitor_host.dart'
+      - 'test/modules/proctoring/live_exam_camera_monitor_host_test.dart'
+      - '.github/workflows/live-exam-camera.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-live-camera:
+    name: Flutter live camera contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Check formatting
+        run: >-
+          dart format --output=none --set-exit-if-changed
+          lib/app/routes/app_pages.dart
+          lib/modules/proctoring/services/local_ai_camera_binding.dart
+          lib/modules/proctoring/services/live_exam_camera_runtime.dart
+          lib/modules/proctoring/view/live_exam_camera_monitor_host.dart
+          test/modules/proctoring/live_exam_camera_monitor_host_test.dart
+
+      - name: Analyze live camera slice
+        run: >-
+          flutter analyze
+          lib/app/routes/app_pages.dart
+          lib/modules/proctoring/services/local_ai_camera_binding.dart
+          lib/modules/proctoring/services/live_exam_camera_runtime.dart
+          lib/modules/proctoring/view/live_exam_camera_monitor_host.dart
+          test/modules/proctoring/live_exam_camera_monitor_host_test.dart
+
+      - name: Run live camera lifecycle tests
+        run: flutter test test/modules/proctoring/live_exam_camera_monitor_host_test.dart
