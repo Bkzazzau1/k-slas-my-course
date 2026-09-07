@@ -73,18 +73,9 @@ class LocalAiCameraBinding {
     try {
       await monitor.start();
     } catch (_) {
+      // The route-level runtime owns correction/retry policy. Keep this binding
+      // reusable and expose failure only through [isActive].
       await detach();
-      proctoringController.registerViolation(
-        'Camera monitoring could not start. Please check camera access.',
-        penalty: 0,
-        alert: false,
-        eventType: 'camera_monitoring_unavailable',
-        severity: 'warning',
-        metadata: const <String, Object?>{
-          'source': 'local_exam_camera',
-          'monitoring_state': 'unavailable',
-        },
-      );
     }
   }
 
