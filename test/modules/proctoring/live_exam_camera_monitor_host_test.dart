@@ -5,9 +5,6 @@ import 'package:my_courses/modules/proctoring/services/live_exam_camera_runtime.
 import 'package:my_courses/modules/proctoring/view/live_exam_camera_monitor_host.dart';
 
 class _FakeLiveExamCameraRuntime implements LiveExamCameraRuntime {
-  _FakeLiveExamCameraRuntime({this.startResult = true});
-
-  final bool startResult;
   int startCount = 0;
   int stopCount = 0;
   bool active = false;
@@ -18,8 +15,8 @@ class _FakeLiveExamCameraRuntime implements LiveExamCameraRuntime {
   @override
   Future<bool> start() async {
     startCount += 1;
-    active = startResult;
-    return startResult;
+    active = true;
+    return true;
   }
 
   @override
